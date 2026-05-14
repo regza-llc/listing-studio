@@ -48,10 +48,12 @@ export async function analyzeProductImages(
   ];
 
   const response = await gemini.models.generateContent({
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-2.5-flash",
     contents,
     config: {
       responseMimeType: "application/json",
+      maxOutputTokens: 2048,
+      temperature: 0.2,
     },
   });
 
