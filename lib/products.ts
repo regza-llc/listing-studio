@@ -106,3 +106,49 @@ export async function getPhotoSignedUrl(
   if (error || !data) return null;
   return data.signedUrl;
 }
+
+export type ProductDetail = Product & {
+  product_photos: ProductPhoto[];
+};
+
+export async function getProduct(
+  id: string
+): Promise<{ product: ProductDetail } | { error: string }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      `id, created_at, updated_at, status, title, category_hint, condition,
+       storage_location, start_price, ai_analysis, notes,
+       product_photos ( id, product_id, order_index, storage_path, uploaded_at )`
+    )
+    .eq("id", id)
+    .single();
+
+  if (error || !data) {
+    return { error: error?.message ?? "商品が見つかりませんでした" };
+  }
+
+  return { product: data as ProductDetail };
+}
+
+export type ProductUpdatePatch = Partial<{
+  title: string | null;
+  category_hint: string | null;
+  condition: string | null;
+  storage_location: string | null;
+  start_price: number | null;
+  notes: string | null;
+  status: Product["status"];
+}>;
+
+export async function updateProduct(
+  id: string,
+  patch: ProductUpdatePatch
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = createClient();
+  const { error } = await supabase.from("products").update(patch).eq("id", id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}

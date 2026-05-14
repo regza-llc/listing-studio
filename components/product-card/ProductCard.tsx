@@ -1,6 +1,7 @@
 "use client";
 
 import { ImageOff } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getPhotoSignedUrl } from "@/lib/products";
@@ -64,7 +65,11 @@ export function ProductCard({ product }: { product: ProductListItem }) {
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
 
   return (
-    <Card className="overflow-hidden p-0 gap-0">
+    <Link
+      href={`/products/${product.id}`}
+      className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+    >
+      <Card className="overflow-hidden p-0 gap-0 transition-shadow hover:shadow-md cursor-pointer">
       <div className="aspect-square w-full bg-muted relative">
         {thumbUrl && !thumbError ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -100,6 +105,7 @@ export function ProductCard({ product }: { product: ProductListItem }) {
           {relativeTime(product.created_at)}
         </p>
       </div>
-    </Card>
+      </Card>
+    </Link>
   );
 }
