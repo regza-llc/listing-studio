@@ -13,7 +13,7 @@ import {
   type ResizeOption,
 } from "@/lib/image-resize";
 
-type CapturedPhoto = {
+export type CapturedPhoto = {
   id: string;
   original: File;
   processed: Blob;
@@ -24,9 +24,10 @@ type CapturedPhoto = {
 
 export type CameraCaptureProps = {
   onChange?: (photos: CapturedPhoto[]) => void;
+  disabled?: boolean;
 };
 
-export function CameraCapture({ onChange }: CameraCaptureProps) {
+export function CameraCapture({ onChange, disabled }: CameraCaptureProps) {
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [squareCrop, setSquareCrop] = useState<boolean>(false);
   const [longEdge, setLongEdge] = useState<"1024" | "1920" | "original">(
@@ -169,7 +170,7 @@ export function CameraCapture({ onChange }: CameraCaptureProps) {
           variant="outline"
           size="sm"
           onClick={reprocessAll}
-          disabled={busy || photos.length === 0}
+          disabled={busy || disabled || photos.length === 0}
           className="w-full"
         >
           現在の設定で再リサイズ（{photos.length} 枚）
@@ -190,7 +191,7 @@ export function CameraCapture({ onChange }: CameraCaptureProps) {
           size="lg"
           className="w-full h-16 text-lg"
           onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
+          disabled={busy || disabled}
         >
           <Camera className="size-6" />
           {busy ? "処理中..." : "写真を撮る"}
@@ -225,7 +226,8 @@ export function CameraCapture({ onChange }: CameraCaptureProps) {
                 <button
                   type="button"
                   onClick={() => removePhoto(p.id)}
-                  className="absolute -top-1 -right-1 size-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+                  disabled={disabled}
+                  className="absolute -top-1 -right-1 size-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label="削除"
                 >
                   <X className="size-3.5" />
