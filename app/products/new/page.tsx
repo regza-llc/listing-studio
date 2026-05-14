@@ -35,6 +35,12 @@ export default function NewProductPage() {
       return;
     }
 
+    fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: result.id }),
+    }).catch((e) => console.error("[analyze] trigger failed:", e));
+
     router.push("/");
     router.refresh();
   }

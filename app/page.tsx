@@ -1,8 +1,8 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Button } from "@/components/ui/button";
 import { listProducts, type ProductListItem } from "@/lib/products";
@@ -10,18 +10,33 @@ import { listProducts, type ProductListItem } from "@/lib/products";
 export default function Home() {
   const [products, setProducts] = useState<ProductListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchList = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true);
+    const result = await listProducts();
+    if ("error" in result) setError(result.error);
+    else {
+      setProducts(result.products);
+      setError(null);
+    }
+    if (showSpinner) setRefreshing(false);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    listProducts().then((result) => {
-      if (cancelled) return;
-      if ("error" in result) setError(result.error);
-      else setProducts(result.products);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    fetchList();
+  }, [fetchList]);
+
+  useEffect(() => {
+    if (!products) return;
+    const hasDraft = products.some((p) => p.status === "draft");
+    if (!hasDraft) return;
+
+    const interval = setInterval(() => {
+      fetchList();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [products, fetchList]);
 
   return (
     <main className="container mx-auto max-w-5xl px-4 py-6 pb-24">
@@ -58,10 +73,27 @@ export default function Home() {
 
       {products && products.length > 0 && (
         <>
-          <div className="mb-3 flex items-baseline justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
               {products.length} 件の下書き
+              {products.some((p) => p.status === "draft") && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                  <Loader2 className="size-3 animate-spin" />
+                  AI 推定中...
+                </span>
+              )}
             </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => fetchList(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+              更新
+            </Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {products.map((p) => (
