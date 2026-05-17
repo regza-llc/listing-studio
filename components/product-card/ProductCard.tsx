@@ -1,29 +1,19 @@
 "use client";
 
-import { ImageOff } from "lucide-react";
+import { ImageOff, Images } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getPhotoSignedUrl } from "@/lib/products";
 import type { ProductListItem } from "@/lib/products";
+import { cn } from "@/lib/utils";
 
-const STATUS_LABEL: Record<string, { label: string; className: string }> = {
-  draft: {
-    label: "下書き",
-    className: "bg-secondary text-secondary-foreground",
-  },
-  reviewing: {
-    label: "AI 推定済",
-    className: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  },
-  ready: {
-    label: "完成",
-    className: "bg-green-500/10 text-green-700 dark:text-green-300",
-  },
-  exported: {
-    label: "出力済",
-    className: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300",
-  },
+const STATUS_LABEL: Record<string, { label: string; variant: BadgeVariant }> = {
+  draft: { label: "下書き", variant: "neutral" },
+  reviewing: { label: "AI 推定済", variant: "info" },
+  ready: { label: "完成", variant: "success" },
+  exported: { label: "出力済", variant: "secondary" },
 };
 
 function relativeTime(iso: string) {
@@ -39,24 +29,36 @@ function relativeTime(iso: string) {
   return new Date(iso).toLocaleDateString("ja-JP");
 }
 
-export function ProductCard({ product }: { product: ProductListItem }) {
+export type ProductCardProps = {
+  product: ProductListItem;
+  selectMode?: boolean;
+  selected?: boolean;
+  onSelectChange?: (id: string, next: boolean) => void;
+};
+
+export function ProductCard({
+  product,
+  selectMode = false,
+  selected = false,
+  onSelectChange,
+}: ProductCardProps) {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
   const [thumbError, setThumbError] = useState(false);
 
-  const firstPhoto = product.product_photos
+  const photos = product.product_photos
     ?.slice()
-    .sort((a, b) => a.order_index - b.order_index)?.[0];
+    .sort((a, b) => a.order_index - b.order_index);
+  const firstPhoto = photos?.[0];
+  const photoCount = photos?.length ?? 0;
 
   useEffect(() => {
     let cancelled = false;
     if (!firstPhoto) return;
-
     getPhotoSignedUrl(firstPhoto.storage_path).then((url) => {
       if (cancelled) return;
       if (url) setThumbUrl(url);
       else setThumbError(true);
     });
-
     return () => {
       cancelled = true;
     };
@@ -64,48 +66,102 @@ export function ProductCard({ product }: { product: ProductListItem }) {
 
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
 
-  return (
-    <Link
-      href={`/products/${product.id}`}
-      className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
-    >
-      <Card className="overflow-hidden p-0 gap-0 transition-shadow hover:shadow-md cursor-pointer">
-      <div className="aspect-square w-full bg-muted relative">
+  const innerClassName = cn(
+    "block rounded-2xl bg-card transition-all",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    selectMode ? "cursor-pointer" : "hover:-translate-y-0.5",
+    selected && "ring-2 ring-primary ring-offset-2",
+  );
+
+  const inner = (
+    <div className="group relative overflow-hidden rounded-2xl border border-border/60 bg-zinc-100 shadow-sm">
+      <div className="relative aspect-square w-full">
         {thumbUrl && !thumbError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumbUrl}
             alt={product.title ?? "商品画像"}
-            className="size-full object-cover"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setThumbError(true)}
           />
         ) : (
-          <div className="size-full flex items-center justify-center text-muted-foreground">
-            <ImageOff className="size-8" />
+          <div className="flex size-full items-center justify-center text-zinc-400">
+            <ImageOff className="size-10" />
           </div>
         )}
-        <span
-          className={`absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold rounded-full ${statusInfo.className}`}
-        >
-          {statusInfo.label}
-        </span>
-        {product.product_photos && product.product_photos.length > 1 && (
-          <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-black/60 text-white">
-            +{product.product_photos.length - 1}
-          </span>
+
+        <div className="absolute left-2 top-2 flex items-center gap-1.5">
+          <Badge variant={statusInfo.variant} className="shadow-sm backdrop-blur-sm">
+            {statusInfo.label}
+          </Badge>
+        </div>
+
+        {photoCount > 1 && (
+          <div className="absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            <Images className="size-3" />
+            {photoCount}
+          </div>
+        )}
+
+        {selectMode && (
+          <div className="absolute inset-0 flex items-start justify-end p-2">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(v) => onSelectChange?.(product.id, v)}
+              className="size-6 bg-white/90 shadow-md"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         )}
       </div>
-      <div className="p-3 space-y-1">
-        <p className="text-sm font-medium line-clamp-2 min-h-[2.5em]">
+
+      <div className="space-y-1.5 bg-card px-3 py-3">
+        <p className="line-clamp-2 min-h-[2.5em] text-sm font-medium leading-snug">
           {product.title ?? (
-            <span className="text-muted-foreground italic">未推定</span>
+            <span className="italic text-zinc-400">未推定</span>
           )}
         </p>
-        <p className="text-[10px] text-muted-foreground">
-          {relativeTime(product.created_at)}
-        </p>
+
+        <div className="flex items-center justify-between">
+          <span className="text-base font-bold tabular-nums">
+            {product.start_price != null ? (
+              `¥${product.start_price.toLocaleString()}`
+            ) : (
+              <span className="text-xs font-normal text-zinc-400">
+                価格未設定
+              </span>
+            )}
+          </span>
+          <span className="text-[10px] text-zinc-400">
+            {relativeTime(product.created_at)}
+          </span>
+        </div>
       </div>
-      </Card>
+    </div>
+  );
+
+  if (selectMode) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectChange?.(product.id, !selected)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectChange?.(product.id, !selected);
+          }
+        }}
+        className={innerClassName}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/products/${product.id}`} className={innerClassName}>
+      {inner}
     </Link>
   );
 }

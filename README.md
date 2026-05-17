@@ -25,15 +25,15 @@
 - スマホブラウザ（Chrome 想定）でカメラ起動 → 連続撮影
 - 撮影 → 画像リサイズ（**正方形クロップ + 長辺 1024 / 1920 / オリジナル**）→ Supabase Storage 保存
 - 商品単位で下書き保存（「+ 新しい商品」UI で明示区切り）
-- Gemini 2.0 Flash で商品名・カテゴリ・状態の AI 推定
-- カードグリッド一覧表示
+- Gemini 2.5 Flash で商品名・カテゴリ・状態の AI 推定
+- カードグリッド一覧表示（メルカリ風 / 白基調）
+- **写真 + CSV のローカル書き出し（アプリ内 ZIP / PC バッチスクリプトの 2 系統）**
 
 ### やらないこと（v1.0 以降）
 
 - Google 認証（v0.1 は飯田 1 人運用）
 - 複数人リアルタイム同期
 - Google 検索 Grounding による相場検索
-- オークタウン CSV 出力（既存 Claude Code スキルが担う）
 - PWA 化（ホーム画面追加）
 
 ### 動作確認 OK の判定
@@ -92,9 +92,14 @@ cp .env.example .env.local
 # 5. 開発サーバー起動
 npm run dev
 # → http://localhost:3000
+
+# 6. ローカル書き出し（写真 + CSV を C:\Yahoo\exports\YYYY-MM-DD\ に展開）
+npm run export                       # status=ready の全商品
+npm run export -- --status all       # 全ステータス
+npm run export -- --help             # オプション一覧
 ```
 
-詳細は `docs/SETUP.md` を参照。
+詳細は `docs/SETUP.md` / `docs/EXPORT.md` を参照。
 
 ---
 
@@ -130,10 +135,12 @@ listing-studio/
 │  └ types.ts                     # 共通型
 ├ supabase/
 │  └ migrations/                  # SQL マイグレーション
+├ scripts/
+│  └ export.mjs                   # PC 同期スクリプト（npm run export）
 └ docs/
    ├ SETUP.md                     # 詳細セットアップ
    ├ MVP_SCOPE.md                 # スコープ定義詳細
-   └ ARCHITECTURE.md              # 設計図（後付け）
+   └ EXPORT.md                    # エクスポート機能（写真 + CSV ローカル書き出し）
 ```
 
 ---
