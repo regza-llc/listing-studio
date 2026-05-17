@@ -1,44 +1,19 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  AUCTOWN_CSV_HEADER,
+  AUCTOWN_DEFAULTS,
+  AUCTOWN_IMAGE_SLOTS,
+  buildAuctownImageFilename,
+  buildDescription,
+  formatStartPrice,
+  mapConditionToYahooLabel,
+  rowToAuctownCsv,
+} from "@/lib/auctown";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-const CSV_HEADER = [
-  "商品ID",
-  "タイトル",
-  "ヤフオクカテゴリパス",
-  "商品説明文",
-  "状態",
-  "しまう場所",
-  "開始価格",
-  "想定相場下限",
-  "想定相場上限",
-  "推奨配送方法",
-  "採寸",
-  "備考",
-  "写真ファイル",
-  "ステータス",
-  "作成日時",
-];
-
-function escapeCsv(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const str = String(value);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function rowToCsv(values: unknown[]): string {
-  return values.map(escapeCsv).join(",");
-}
-
-function safeFolderName(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 36);
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,10 +32,11 @@ export async function POST(req: NextRequest) {
     const { data: products, error: productsErr } = await supabase
       .from("products")
       .select(
-        `id, created_at, status, title, category_hint, yahoo_category_path,
+        `id, created_at, status, title, category_hint,
+         yahoo_category_path, yahoo_category_id,
          description, condition, storage_location, start_price,
          suggested_price_min, suggested_price_max, shipping_hint, notes,
-         dimensions,
+         dimensions, flaws,
          product_photos ( storage_path, order_index )`,
       )
       .in("id", productIds);
@@ -77,21 +53,23 @@ export async function POST(req: NextRequest) {
     }
 
     const zip = new JSZip();
-    const csvLines: string[] = [rowToCsv(CSV_HEADER)];
+    const csvLines: string[] = [rowToAuctownCsv(Array.from(AUCTOWN_CSV_HEADER))];
+
+    // 警告メッセージ蓄積（カテゴリID未取得など）
+    const warnings: string[] = [];
 
     for (const p of products) {
-      const folder = safeFolderName(p.id);
       const photos = (p.product_photos ?? [])
         .slice()
-        .sort((a, b) => a.order_index - b.order_index);
+        .sort((a, b) => a.order_index - b.order_index)
+        .slice(0, AUCTOWN_IMAGE_SLOTS); // 10枚まで
 
-      const photoFilenames: string[] = [];
-
+      // 画像をフラットに ZIP へ追加 + ファイル名配列を作る
+      const imageFilenames: string[] = [];
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         const ext = photo.storage_path.split(".").pop() ?? "jpg";
-        const filename = `photo_${String(i + 1).padStart(2, "0")}.${ext}`;
-        const localPath = `${folder}/${filename}`;
+        const filename = buildAuctownImageFilename(p.id, i, ext);
 
         const { data: blob, error: dlErr } = await supabase.storage
           .from("product-photos")
@@ -99,65 +77,120 @@ export async function POST(req: NextRequest) {
 
         if (dlErr || !blob) {
           console.error(`[export] download失敗: ${photo.storage_path}`, dlErr);
+          warnings.push(`商品 ${p.id} の画像 ${i + 1} がダウンロード失敗`);
           continue;
         }
 
         const buffer = Buffer.from(await blob.arrayBuffer());
-        zip.file(localPath, buffer);
-        photoFilenames.push(localPath);
+        zip.file(filename, buffer);
+        imageFilenames.push(filename);
       }
 
-      const dimensionsStr = Array.isArray(p.dimensions)
-        ? p.dimensions
-            .map(
-              (d: { label?: string; value?: number; unit?: string }) =>
-                `${d.label ?? ""} ${d.value ?? ""}${d.unit ?? ""}`.trim(),
-            )
-            .join(" / ")
-        : "";
+      // 画像10枠分のセル（足りない分は空文字）
+      const imageCells: string[] = Array.from(
+        { length: AUCTOWN_IMAGE_SLOTS },
+        (_, i) => imageFilenames[i] ?? "",
+      );
+
+      const categoryId = (p.yahoo_category_id ?? "").toString().trim();
+      if (!categoryId) {
+        warnings.push(
+          `商品 ${p.id} のカテゴリ ID が未取得（タイトル: ${p.title ?? "(無題)"} ）。CSVの「カテゴリ」列は空欄です。`,
+        );
+      }
+
+      const description = buildDescription({
+        description: p.description,
+        dimensions: p.dimensions,
+        flaws: p.flaws,
+        notes: p.notes,
+      });
+
+      // start_price 未設定なら相場下限を使う
+      const startPrice =
+        p.start_price ?? p.suggested_price_min ?? null;
 
       csvLines.push(
-        rowToCsv([
-          p.id,
-          p.title ?? "",
-          p.yahoo_category_path ?? p.category_hint ?? "",
-          p.description ?? "",
-          p.condition ?? "",
-          p.storage_location ?? "",
-          p.start_price ?? "",
-          p.suggested_price_min ?? "",
-          p.suggested_price_max ?? "",
-          p.shipping_hint ?? "",
-          dimensionsStr,
-          p.notes ?? "",
-          photoFilenames.join("|"),
-          p.status,
-          p.created_at,
+        rowToAuctownCsv([
+          categoryId, // 1. カテゴリ
+          p.title ?? "", // 2. タイトル
+          description, // 3. 説明
+          formatStartPrice(startPrice), // 4. 開始価格
+          AUCTOWN_DEFAULTS.quantity, // 5. 個数
+          AUCTOWN_DEFAULTS.duration_days, // 6. 開催期間
+          AUCTOWN_DEFAULTS.end_time_hour, // 7. 終了時間
+          mapConditionToYahooLabel(p.condition), // 8. 商品の状態
+          AUCTOWN_DEFAULTS.returns, // 9. 返品の可否
+          AUCTOWN_DEFAULTS.seller_prefecture, // 10. 商品発送元の都道府県
+          AUCTOWN_DEFAULTS.shipping_payer, // 11. 送料負担
+          AUCTOWN_DEFAULTS.payment_method, // 12. 代金支払い
+          AUCTOWN_DEFAULTS.yahoo_kantan, // 13. yahoo!簡単決済
+          AUCTOWN_DEFAULTS.shipping_days, // 14. 発送までの日数
+          AUCTOWN_DEFAULTS.auto_extension, // 15. 自動延長
+          AUCTOWN_DEFAULTS.early_close, // 16. 早期終了
+          ...imageCells, // 17〜26. 画像1〜10
         ]),
       );
     }
 
+    // UTF-8 BOM + CRLF（Excel/オークタウン両方で読める）
     const csvBody = csvLines.join("\r\n");
     const csvWithBom = "﻿" + csvBody;
-    zip.file("okutown_import.csv", csvWithBom);
+    zip.file("auctown_listing.csv", csvWithBom);
 
-    const readme = `# listing-studio エクスポート
+    // README
+    const readme = `# listing-studio オークタウン出品 ZIP
 
 エクスポート日時: ${new Date().toISOString()}
 対象商品数: ${products.length}
 
-## フォルダ構成
+## ファイル構成
 
-- okutown_import.csv: 商品情報一覧（UTF-8 BOM・Excelで直接開けます）
-- {商品ID}/photo_*.jpg: 商品ごとの写真フォルダ
+- auctown_listing.csv : オークタウン公式テンプレ準拠の出品 CSV（UTF-8 BOM・26 列）
+- *.jpg : 出品用画像（CSV の「画像1〜10」列で参照）
 
-## オークタウン取込みの想定手順
+## オークタウン取込手順
 
-1. okutown_import.csv を Excel で開いて、カラム名をオークタウン公式テンプレに合わせる
-2. 商品ID フォルダの写真をオークタウンの画像アップロードに使う
-3. 不要な項目は削除して保存
+1. ZIP を解凍する（フォルダ階層なしのフラット展開）
+2. オークタウン管理画面 → 一括出品 → CSV インポート
+3. auctown_listing.csv をアップロード
+4. 画像を一括アップロード（ZIP 解凍後のすべての .jpg を選択）
+5. プレビュー確認 → 問題なければ出品実行
 
-※ CSV のカラムは v0.1 暫定です。5/20 MTG でおきちゃんに確認後、オークタウン公式仕様にマッピングします。
+## 固定値（settings）
+
+以下はすべての商品に共通で入る値（環境変数で上書き可能）:
+
+| 列 | 値 | 環境変数 |
+|---|---|---|
+| 個数 | ${AUCTOWN_DEFAULTS.quantity} | AUCTOWN_QUANTITY |
+| 開催期間（日）| ${AUCTOWN_DEFAULTS.duration_days} | AUCTOWN_DURATION_DAYS |
+| 終了時間（時）| ${AUCTOWN_DEFAULTS.end_time_hour} | AUCTOWN_END_TIME |
+| 返品の可否 | ${AUCTOWN_DEFAULTS.returns} | AUCTOWN_RETURNS |
+| 発送元都道府県 | ${AUCTOWN_DEFAULTS.seller_prefecture} | AUCTOWN_SELLER_PREFECTURE |
+| 送料負担 | ${AUCTOWN_DEFAULTS.shipping_payer} | AUCTOWN_SHIPPING_PAYER |
+| 代金支払い | ${AUCTOWN_DEFAULTS.payment_method} | AUCTOWN_PAYMENT_METHOD |
+| yahoo!簡単決済 | ${AUCTOWN_DEFAULTS.yahoo_kantan} | AUCTOWN_YAHOO_KANTAN |
+| 発送までの日数 | ${AUCTOWN_DEFAULTS.shipping_days} | AUCTOWN_SHIPPING_DAYS |
+| 自動延長 | ${AUCTOWN_DEFAULTS.auto_extension} | AUCTOWN_AUTO_EXTENSION |
+| 早期終了 | ${AUCTOWN_DEFAULTS.early_close} | AUCTOWN_EARLY_CLOSE |
+
+## 状態ランクのマッピング
+
+listing-studio 内部の A/B/C/D は以下の通り公式区分にマッピングされます:
+
+- A → 目立った傷や汚れなし
+- B → やや傷や汚れあり
+- C → 傷や汚れあり
+- D → 全体的に状態が悪い
+
+(古物商前提のため「未使用」「未使用に近い」は使用しません)
+
+${
+  warnings.length > 0
+    ? `## ⚠ 警告\n\n${warnings.map((w) => `- ${w}`).join("\n")}\n\n→ カテゴリ ID が空欄の行は、オークタウン側で取込前に手動で補完してください。\n`
+    : ""
+}
 `;
     zip.file("README.txt", readme);
 
@@ -175,7 +208,7 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="roka_export_${today}.zip"`,
+        "Content-Disposition": `attachment; filename="auctown_${today}.zip"`,
         "Content-Length": zipBuffer.length.toString(),
       },
     });

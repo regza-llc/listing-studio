@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
         title: firstTitle,
         category_hint: analysis.category_hint || null,
         yahoo_category_path: analysis.yahoo_category_path || null,
+        yahoo_category_id: analysis.yahoo_category_id || null,
         condition: analysis.condition || null,
         storage_location: analysis.storage_location_hint || null,
         description: analysis.description || null,

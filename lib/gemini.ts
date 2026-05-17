@@ -121,6 +121,7 @@ export type SmartAnalysisResult = {
   notes: string;
   // 新規（Smart 分析で追加）
   yahoo_category_path: string;
+  yahoo_category_id: string;
   description: string;
   shipping_hint: string;
   // 相場（Grounding ベース）
@@ -148,7 +149,8 @@ const SMART_PROMPT = `あなたはヤフオク・メルカリ出品のプロで�
 {
   "title_candidates": ["候補1（最も具体的）", "候補2", "候補3"],
   "category_hint": "簡易カテゴリ（短く）",
-  "yahoo_category_path": "ヤフオク公式の完全カテゴリパス（例: 食器・キッチン > 食器 > 洋食器 > 皿）",
+  "yahoo_category_path": "ヤフオク公式の完全カテゴリパス（例: 食器、キッチン > 食器 > 洋食器 > 皿）",
+  "yahoo_category_id": "ヤフオク公式カテゴリID（10桁数字。例: 2084009001）。リーフカテゴリの ID を優先",
   "condition": "A | B | C | D",
   "storage_location_hint": "棚A-3 等",
   "notes": "気づいた点・特徴・キズ等（80字以内）",
@@ -167,6 +169,7 @@ const SMART_PROMPT = `あなたはヤフオク・メルカリ出品のプロで�
 【ルール】
 - title_candidates: ブランド/型番/素材/サイズを含めて具体的に
 - yahoo_category_path: Google 検索で実際のヤフオク カテゴリツリーに対応する形に
+- yahoo_category_id: Google 検索（site:auctions.yahoo.co.jp or category.yahoo.co.jp）でリーフカテゴリの URL から ID を取得すること。形式は10桁前後の半角数字のみ（例 "2084009001"）。確信が持てない場合は親カテゴリ ID で代替し、不明時は空文字 ""
 - description: メルカリ・ヤフオクで売れる文章構造を意識（敬体・読みやすさ重視）
 - price: 落札事例が少ない場合は null・数値は日本円整数
 - 商品が判別できない場合: title_candidates を空配列、price を null に
@@ -269,6 +272,13 @@ export async function smartAnalyzeProduct(
     storage_location_hint: parsed.storage_location_hint ?? "",
     notes: parsed.notes ?? "",
     yahoo_category_path: parsed.yahoo_category_path ?? "",
+    yahoo_category_id:
+      typeof (parsed as { yahoo_category_id?: unknown }).yahoo_category_id ===
+      "string"
+        ? String(
+            (parsed as { yahoo_category_id: string }).yahoo_category_id,
+          ).replace(/[^0-9]/g, "")
+        : "",
     description: parsed.description ?? "",
     shipping_hint: parsed.shipping_hint ?? "",
     price_min: typeof parsed.price_min === "number" ? parsed.price_min : null,
