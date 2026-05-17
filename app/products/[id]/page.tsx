@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ImageOff,
   Loader2,
+  Save,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -33,10 +34,22 @@ type AiAnalysis = {
 };
 
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
-  draft: { label: "下書き", tone: "bg-secondary text-secondary-foreground" },
-  reviewing: { label: "AI 推定済", tone: "bg-blue-500/10 text-blue-700 dark:text-blue-300" },
-  ready: { label: "完成", tone: "bg-green-500/10 text-green-700 dark:text-green-300" },
-  exported: { label: "出力済", tone: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300" },
+  draft: {
+    label: "下書き",
+    tone: "bg-zinc-100 text-zinc-700 border border-zinc-200",
+  },
+  reviewing: {
+    label: "AI 推定済 / 仕分け待ち",
+    tone: "bg-sky-100 text-sky-700 border border-sky-200",
+  },
+  ready: {
+    label: "✓ 仕分け完了",
+    tone: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  },
+  exported: {
+    label: "出力済",
+    tone: "bg-zinc-100 text-zinc-700 border border-zinc-200",
+  },
 };
 
 const CONDITIONS = ["A", "B", "C", "D"] as const;
@@ -63,9 +76,18 @@ export default function ProductDetailPage() {
   });
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "info";
+  } | null>(null);
 
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+
+  function showToast(message: string, tone: "success" | "info" = "success") {
+    setToast({ message, tone });
+    setTimeout(() => setToast(null), 2500);
+  }
 
   const fetchProduct = useCallback(async () => {
     const result = await getProduct(productId);
@@ -162,8 +184,10 @@ export default function ProductDetailPage() {
 
     if ("error" in result) {
       setError(result.error);
+      showToast(`保存失敗: ${result.error}`, "info");
     } else {
       setSavedAt(new Date().toLocaleTimeString("ja-JP"));
+      showToast("✓ 変更を保存しました");
       await fetchProduct();
     }
     setSaving(false);
@@ -194,10 +218,36 @@ export default function ProductDetailPage() {
   async function handleMarkReady() {
     if (!product) return;
     setSaving(true);
-    await handleSave();
-    await updateProduct(product.id, { status: "ready" });
-    await fetchProduct();
-    setSaving(false);
+
+    const startPriceNum = form.start_price.trim()
+      ? Number(form.start_price)
+      : null;
+
+    const saveResult = await updateProduct(product.id, {
+      title: form.title.trim() || null,
+      category_hint: form.category_hint.trim() || null,
+      condition: form.condition.trim() || null,
+      storage_location: form.storage_location.trim() || null,
+      start_price:
+        startPriceNum !== null && Number.isFinite(startPriceNum)
+          ? Math.round(startPriceNum)
+          : null,
+      notes: form.notes.trim() || null,
+      status: "ready",
+    });
+
+    if ("error" in saveResult) {
+      setError(saveResult.error);
+      showToast(`完了処理失敗: ${saveResult.error}`, "info");
+      setSaving(false);
+      return;
+    }
+
+    showToast("✓ 仕分け完了 — ホームへ戻ります");
+    setTimeout(() => {
+      router.push("/");
+      router.refresh();
+    }, 700);
   }
 
   if (loading) {
@@ -443,33 +493,70 @@ export default function ProductDetailPage() {
       </Card>
 
       <div className="fixed bottom-0 inset-x-0 bg-background border-t border-border">
-        <div className="container mx-auto max-w-3xl px-4 py-3 flex gap-2">
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-            保存
-          </Button>
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={handleMarkReady}
-            disabled={saving || product.status === "ready"}
-          >
-            {product.status === "ready" ? (
-              <>
-                <CheckCircle2 className="size-4" /> 完成済み
-              </>
-            ) : (
-              <>レビュー完了</>
-            )}
-          </Button>
+        <div className="container mx-auto max-w-3xl px-4 py-3 space-y-2">
+          {product.status !== "ready" && (
+            <p className="text-center text-[11px] text-muted-foreground">
+              <span className="font-semibold">変更を保存</span>{" "}
+              ＝編集内容のみ保存（ステータスはそのまま）/{" "}
+              <span className="font-semibold">仕分け完了</span>{" "}
+              ＝保存してホームへ戻る（CSV書き出し対象に）
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              変更を保存
+            </Button>
+            <Button
+              size="lg"
+              className="flex-1"
+              onClick={handleMarkReady}
+              disabled={saving || product.status === "ready"}
+            >
+              {product.status === "ready" ? (
+                <>
+                  <CheckCircle2 className="size-4" /> 仕分け完了済み
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="size-4" />
+                  ✓ 仕分け完了 → ホームへ
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* トースト */}
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[80] mx-auto max-w-md px-4">
+          <div
+            className={`flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg backdrop-blur-md ${
+              toast.tone === "success"
+                ? "bg-emerald-500 text-white"
+                : "bg-zinc-900 text-white"
+            }`}
+          >
+            {toast.tone === "success" ? (
+              <CheckCircle2 className="size-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="size-5 flex-shrink-0" />
+            )}
+            <p className="text-sm font-semibold">{toast.message}</p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
