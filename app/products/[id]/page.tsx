@@ -7,12 +7,15 @@ import {
   ExternalLink,
   ImageOff,
   Loader2,
+  Ruler,
   RotateCcw,
   Save,
   Sparkles,
   Trash2,
   TrendingUp,
 } from "lucide-react";
+import { DimensionInput } from "@/components/dimension-input/DimensionInput";
+import type { Dimension } from "@/lib/types";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -242,6 +245,7 @@ export default function ProductDetailPage() {
     description: "",
     shipping_hint: "",
   });
+  const [dimensions, setDimensions] = useState<Dimension[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -283,6 +287,11 @@ export default function ProductDetailPage() {
       description: result.product.description ?? "",
       shipping_hint: result.product.shipping_hint ?? "",
     });
+    setDimensions(
+      Array.isArray(result.product.dimensions)
+        ? result.product.dimensions
+        : [],
+    );
     setError(null);
     setLoading(false);
   }, [productId]);
@@ -361,6 +370,7 @@ export default function ProductDetailPage() {
       notes: form.notes.trim() || null,
       description: form.description.trim() || null,
       shipping_hint: form.shipping_hint.trim() || null,
+      dimensions: dimensions.length > 0 ? dimensions : null,
     });
 
     if ("error" in result) {
@@ -504,6 +514,7 @@ export default function ProductDetailPage() {
       notes: form.notes.trim() || null,
       description: form.description.trim() || null,
       shipping_hint: form.shipping_hint.trim() || null,
+      dimensions: dimensions.length > 0 ? dimensions : null,
       status: "ready",
     });
 
@@ -1001,6 +1012,21 @@ export default function ProductDetailPage() {
               setForm((f) => ({ ...f, shipping_hint: e.target.value }))
             }
             placeholder="例: ゆうパック60サイズ / クリックポスト"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <Ruler className="size-3.5" />
+            採寸
+            <span className="text-[10px] font-normal text-muted-foreground">
+              （音声入力対応）
+            </span>
+          </Label>
+          <DimensionInput
+            value={dimensions}
+            onChange={setDimensions}
+            disabled={saving}
           />
         </div>
 

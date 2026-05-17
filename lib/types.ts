@@ -20,6 +20,12 @@ export type ProductFlaw = {
   description: string;
 };
 
+export type Dimension = {
+  label: string; // "身幅" "着丈" "袖丈" "横" "縦" "高さ" "口径" など
+  value: number;
+  unit: "cm" | "mm" | "inch" | "g" | "kg";
+};
+
 export type Product = {
   id: string;
   created_at: string;
@@ -46,6 +52,8 @@ export type Product = {
   price_confidence: number | null;
   // 傷・難ありの自動箇条書き
   flaws: ProductFlaw[] | null;
+  // 採寸データ
+  dimensions: Dimension[] | null;
 };
 
 export type ProductPhoto = {

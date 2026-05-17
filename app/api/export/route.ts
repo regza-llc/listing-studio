@@ -16,6 +16,7 @@ const CSV_HEADER = [
   "想定相場下限",
   "想定相場上限",
   "推奨配送方法",
+  "採寸",
   "備考",
   "写真ファイル",
   "ステータス",
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
         `id, created_at, status, title, category_hint, yahoo_category_path,
          description, condition, storage_location, start_price,
          suggested_price_min, suggested_price_max, shipping_hint, notes,
+         dimensions,
          product_photos ( storage_path, order_index )`,
       )
       .in("id", productIds);
@@ -105,6 +107,15 @@ export async function POST(req: NextRequest) {
         photoFilenames.push(localPath);
       }
 
+      const dimensionsStr = Array.isArray(p.dimensions)
+        ? p.dimensions
+            .map(
+              (d: { label?: string; value?: number; unit?: string }) =>
+                `${d.label ?? ""} ${d.value ?? ""}${d.unit ?? ""}`.trim(),
+            )
+            .join(" / ")
+        : "";
+
       csvLines.push(
         rowToCsv([
           p.id,
@@ -117,6 +128,7 @@ export async function POST(req: NextRequest) {
           p.suggested_price_min ?? "",
           p.suggested_price_max ?? "",
           p.shipping_hint ?? "",
+          dimensionsStr,
           p.notes ?? "",
           photoFilenames.join("|"),
           p.status,
