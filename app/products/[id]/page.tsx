@@ -8,6 +8,7 @@ import {
   Loader2,
   Save,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -83,6 +84,7 @@ export default function ProductDetailPage() {
 
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function showToast(message: string, tone: "success" | "info" = "success") {
     setToast({ message, tone });
@@ -215,6 +217,38 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!product || deleting) return;
+    const ok = window.confirm(
+      `この商品を削除しますか？\n\n写真も含めて完全に削除されます（元に戻せません）。`,
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/delete-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_ids: [product.id] }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      showToast("✓ 削除しました — ホームへ戻ります");
+      setTimeout(() => {
+        router.push("/");
+        router.refresh();
+      }, 700);
+    } catch (e) {
+      showToast(
+        `削除失敗: ${e instanceof Error ? e.message : "Unknown error"}`,
+        "info",
+      );
+      setDeleting(false);
+    }
+  }
+
   async function handleMarkReady() {
     if (!product) return;
     setSaving(true);
@@ -276,7 +310,7 @@ export default function ProductDetailPage() {
   return (
     <main className="container mx-auto max-w-3xl px-4 py-6 pb-32 space-y-6">
       <header className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
+        <Button asChild variant="ghost" size="icon" disabled={deleting}>
           <Link href="/">
             <ArrowLeft className="size-5" />
           </Link>
@@ -302,6 +336,20 @@ export default function ProductDetailPage() {
             )}
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleDelete}
+          disabled={deleting || saving}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          aria-label="この商品を削除"
+        >
+          {deleting ? (
+            <Loader2 className="size-5 animate-spin" />
+          ) : (
+            <Trash2 className="size-5" />
+          )}
+        </Button>
       </header>
 
       <Card className="p-3 gap-3">

@@ -6,6 +6,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,6 +26,7 @@ export default function Home() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -91,6 +93,41 @@ export default function Home() {
     setSelectMode(false);
     setSelectedIds(new Set());
     setExportError(null);
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0 || deleting) return;
+    const count = selectedIds.size;
+    const ok = window.confirm(
+      `選択した ${count} 件を削除しますか？\n\n写真も含めて完全に削除されます（元に戻せません）。`,
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/delete-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_ids: Array.from(selectedIds) }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      showToast(
+        `✓ ${data.deleted_products} 件削除しました（写真 ${data.deleted_photos} 枚）`,
+      );
+      exitSelectMode();
+      fetchList(true);
+    } catch (e) {
+      showToast(
+        `削除失敗: ${e instanceof Error ? e.message : "Unknown error"}`,
+        "error",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleBulkMarkReady() {
@@ -274,13 +311,13 @@ export default function Home() {
               </div>
             )}
             <div className="space-y-2">
-              {/* 上段: 選択件数 + 全選択/解除 + 閉じる */}
+              {/* 上段: 選択件数 + 全選択/解除 + 削除 + 閉じる */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={exitSelectMode}
-                  disabled={exporting || marking}
+                  disabled={exporting || marking || deleting}
                 >
                   <X className="size-5" />
                 </Button>
@@ -291,13 +328,27 @@ export default function Home() {
                     type="button"
                     onClick={toggleSelectAll}
                     className="ml-3 text-xs text-primary underline-offset-2 hover:underline"
-                    disabled={exporting || marking}
+                    disabled={exporting || marking || deleting}
                   >
                     {products && selectedIds.size === products.length
                       ? "全て解除"
                       : "全て選択"}
                   </button>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleBulkDelete}
+                  disabled={selectedIds.size === 0 || deleting || marking || exporting}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label="選択を削除"
+                >
+                  {deleting ? (
+                    <Loader2 className="size-5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-5" />
+                  )}
+                </Button>
               </div>
 
               {/* 下段: アクション 2 ボタン */}
@@ -307,7 +358,7 @@ export default function Home() {
                   size="lg"
                   className="flex-1 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                   onClick={handleBulkMarkReady}
-                  disabled={selectedIds.size === 0 || marking || exporting}
+                  disabled={selectedIds.size === 0 || marking || exporting || deleting}
                 >
                   {marking ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -320,7 +371,7 @@ export default function Home() {
                   size="lg"
                   className="flex-1"
                   onClick={handleExport}
-                  disabled={selectedIds.size === 0 || exporting || marking}
+                  disabled={selectedIds.size === 0 || exporting || marking || deleting}
                 >
                   {exporting ? (
                     <Loader2 className="size-4 animate-spin" />
