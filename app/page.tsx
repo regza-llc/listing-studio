@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 
 export default function Home() {
@@ -23,7 +24,17 @@ export default function Home() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "error";
+  } | null>(null);
+
+  function showToast(message: string, tone: "success" | "error" = "success") {
+    setToast({ message, tone });
+    setTimeout(() => setToast(null), 2500);
+  }
 
   const fetchList = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
@@ -80,6 +91,42 @@ export default function Home() {
     setSelectMode(false);
     setSelectedIds(new Set());
     setExportError(null);
+  }
+
+  async function handleBulkMarkReady() {
+    if (selectedIds.size === 0 || marking) return;
+    const ids = Array.from(selectedIds);
+
+    // 既に ready のものは対象外
+    const targets = products?.filter(
+      (p) => ids.includes(p.id) && p.status !== "ready",
+    );
+    if (!targets || targets.length === 0) {
+      showToast("選択した商品はすべて既に完成しています", "error");
+      return;
+    }
+
+    setMarking(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("products")
+        .update({ status: "ready" })
+        .in(
+          "id",
+          targets.map((p) => p.id),
+        );
+
+      if (error) {
+        showToast(`完成にする処理失敗: ${error.message}`, "error");
+        return;
+      }
+      showToast(`✓ ${targets.length} 件を完成にしました`);
+      exitSelectMode();
+      fetchList(true);
+    } finally {
+      setMarking(false);
+    }
   }
 
   async function handleExport() {
@@ -226,42 +273,84 @@ export default function Home() {
                 {exportError}
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={exitSelectMode}
-                disabled={exporting}
-              >
-                <X className="size-5" />
-              </Button>
-              <div className="flex-1 text-sm">
-                <span className="font-semibold">{selectedIds.size}</span>
-                <span className="text-muted-foreground"> 件選択中</span>
-                <button
-                  type="button"
-                  onClick={toggleSelectAll}
-                  className="ml-3 text-xs text-primary underline-offset-2 hover:underline"
-                  disabled={exporting}
+            <div className="space-y-2">
+              {/* 上段: 選択件数 + 全選択/解除 + 閉じる */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={exitSelectMode}
+                  disabled={exporting || marking}
                 >
-                  {products && selectedIds.size === products.length
-                    ? "全て解除"
-                    : "全て選択"}
-                </button>
+                  <X className="size-5" />
+                </Button>
+                <div className="flex-1 text-sm">
+                  <span className="font-semibold">{selectedIds.size}</span>
+                  <span className="text-muted-foreground"> 件選択中</span>
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="ml-3 text-xs text-primary underline-offset-2 hover:underline"
+                    disabled={exporting || marking}
+                  >
+                    {products && selectedIds.size === products.length
+                      ? "全て解除"
+                      : "全て選択"}
+                  </button>
+                </div>
               </div>
-              <Button
-                size="lg"
-                onClick={handleExport}
-                disabled={selectedIds.size === 0 || exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Download className="size-4" />
-                )}
-                {exporting ? "エクスポート中..." : "エクスポート"}
-              </Button>
+
+              {/* 下段: アクション 2 ボタン */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="flex-1 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                  onClick={handleBulkMarkReady}
+                  disabled={selectedIds.size === 0 || marking || exporting}
+                >
+                  {marking ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4" />
+                  )}
+                  {marking ? "処理中..." : "✓ 完成にする"}
+                </Button>
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={handleExport}
+                  disabled={selectedIds.size === 0 || exporting || marking}
+                >
+                  {exporting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Download className="size-4" />
+                  )}
+                  {exporting ? "出力中..." : "エクスポート"}
+                </Button>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* トースト */}
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[80] mx-auto max-w-md px-4">
+          <div
+            className={`flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg backdrop-blur-md ${
+              toast.tone === "success"
+                ? "bg-emerald-500 text-white"
+                : "bg-zinc-900 text-white"
+            }`}
+          >
+            {toast.tone === "success" ? (
+              <CheckCircle2 className="size-5 flex-shrink-0" />
+            ) : (
+              <X className="size-5 flex-shrink-0" />
+            )}
+            <p className="text-sm font-semibold">{toast.message}</p>
           </div>
         </div>
       )}
