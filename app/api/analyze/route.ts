@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
         description: analysis.description || null,
         shipping_hint: analysis.shipping_hint || null,
         notes: analysis.notes || null,
+        flaws: analysis.flaws,
         ai_analysis: analysis as unknown as Record<string, unknown>,
         // 相場情報も同じテーブルに保存
         suggested_price_min: analysis.price_min,

@@ -124,7 +124,7 @@ export async function getProduct(
        suggested_price_min, suggested_price_max, price_research_summary,
        price_research_sources, price_researched_at,
        description, yahoo_category_path, shipping_hint,
-       sold_comps, price_confidence,
+       sold_comps, price_confidence, flaws,
        product_photos ( id, product_id, order_index, storage_path, uploaded_at )`
     )
     .eq("id", id)

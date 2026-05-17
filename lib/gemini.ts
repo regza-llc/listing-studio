@@ -106,6 +106,12 @@ ${input.additional_prompt ? `\n【ユーザーからの追加指示】\n${input.
 // Smart 分析: 画像認識 + Google検索 Grounding + 説明文生成を 1 回で実行
 // =====================================================================
 
+export type ProductFlaw = {
+  location: string; // 「右袖口」「ファスナー金具」など
+  severity: "minor" | "moderate" | "major"; // 軽微 / 中程度 / 深刻
+  description: string; // 具体的な状態の説明
+};
+
 export type SmartAnalysisResult = {
   // 既存
   title_candidates: string[];
@@ -124,6 +130,8 @@ export type SmartAnalysisResult = {
   price_summary: string;
   // 出典 URL
   sources: PriceResearchSource[];
+  // 傷・難あり（全画像から抽出）
+  flaws: ProductFlaw[];
 };
 
 const SMART_PROMPT = `あなたはヤフオク・メルカリ出品のプロです。
@@ -144,12 +152,16 @@ const SMART_PROMPT = `あなたはヤフオク・メルカリ出品のプロで�
   "condition": "A | B | C | D",
   "storage_location_hint": "棚A-3 等",
   "notes": "気づいた点・特徴・キズ等（80字以内）",
-  "description": "出品用の商品説明文（300〜500字・改行含む・販売しやすい構成。商品概要 / 状態 / サイズ / 配送 / 注意事項の順）",
+  "description": "出品用の商品説明文（300〜500字・改行含む・販売しやすい構成。商品概要 / 状態 / サイズ / 配送 / 注意事項の順）。傷があれば本文中にも明記すること。",
   "shipping_hint": "推奨配送方法（例: ゆうパック60サイズ / クリックポスト / らくらくメルカリ便宅急便コンパクト 等）",
   "price_min": 3500,
   "price_max": 6800,
   "price_median": 5000,
-  "price_summary": "相場の説明（120字以内・状態考慮）"
+  "price_summary": "相場の説明（120字以内・状態考慮）",
+  "flaws": [
+    { "location": "右袖口", "severity": "minor", "description": "黒い小さなシミ（直径3mm程度）" },
+    { "location": "ファスナー金具", "severity": "moderate", "description": "金属部分にサビ" }
+  ]
 }
 
 【ルール】
@@ -158,6 +170,11 @@ const SMART_PROMPT = `あなたはヤフオク・メルカリ出品のプロで�
 - description: メルカリ・ヤフオクで売れる文章構造を意識（敬体・読みやすさ重視）
 - price: 落札事例が少ない場合は null・数値は日本円整数
 - 商品が判別できない場合: title_candidates を空配列、price を null に
+- **flaws**: 全画像を精査して傷・汚れ・劣化・欠けを **具体的な位置 + 重度 + 説明**で箇条書き化する。
+  - location は「右袖口」「ファスナー金具」「カップ底」など物理的な部位を明示
+  - severity: "minor"=軽微 / "moderate"=中程度 / "major"=深刻
+  - **傷が見当たらない場合は flaws を空配列 []** にする（無理に作らない）
+  - **クレーム回避のため**「気にならない使用感」も控えめに列挙してOK
 - JSON のみ。説明文や前後の文字列は付けないでください`;
 
 export async function smartAnalyzeProduct(
@@ -217,6 +234,32 @@ export async function smartAnalyzeProduct(
     .map((w) => ({ url: w.uri, title: w.title ?? w.uri }))
     .slice(0, 8);
 
+  // flaws のサニタイズ
+  type ParsedFlaw = {
+    location?: string;
+    severity?: string;
+    description?: string;
+  };
+  const flawsRaw = (parsed as { flaws?: unknown }).flaws;
+  const flaws: ProductFlaw[] = Array.isArray(flawsRaw)
+    ? (flawsRaw as ParsedFlaw[])
+        .filter(
+          (f): f is ParsedFlaw & { location: string; description: string } =>
+            typeof f.location === "string" &&
+            typeof f.description === "string" &&
+            f.location.length > 0,
+        )
+        .map((f): ProductFlaw => ({
+          location: f.location,
+          severity:
+            f.severity === "major" || f.severity === "moderate"
+              ? f.severity
+              : "minor",
+          description: f.description,
+        }))
+        .slice(0, 10)
+    : [];
+
   return {
     title_candidates: Array.isArray(parsed.title_candidates)
       ? parsed.title_candidates
@@ -234,6 +277,7 @@ export async function smartAnalyzeProduct(
       typeof parsed.price_median === "number" ? parsed.price_median : null,
     price_summary: parsed.price_summary ?? "",
     sources,
+    flaws,
   };
 }
 

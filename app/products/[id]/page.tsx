@@ -98,6 +98,52 @@ function SoldCompRow({ comp }: { comp: SoldCompType }) {
   );
 }
 
+type FlawType = {
+  location: string;
+  severity: "minor" | "moderate" | "major";
+  description: string;
+};
+
+const SEVERITY_LABEL: Record<
+  string,
+  { label: string; color: string; icon: string }
+> = {
+  minor: {
+    label: "軽微",
+    color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    icon: "⚠",
+  },
+  moderate: {
+    label: "中程度",
+    color: "bg-orange-100 text-orange-800 border-orange-200",
+    icon: "⚠",
+  },
+  major: {
+    label: "深刻",
+    color: "bg-red-100 text-red-800 border-red-200",
+    icon: "⛔",
+  },
+};
+
+function FlawRow({ flaw }: { flaw: FlawType }) {
+  const sev = SEVERITY_LABEL[flaw.severity] ?? SEVERITY_LABEL.minor;
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-zinc-200 bg-zinc-50/50 px-2 py-1.5">
+      <span
+        className={`flex-shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none border ${sev.color}`}
+      >
+        {sev.icon} {sev.label}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-zinc-900">{flaw.location}</p>
+        <p className="text-[11px] leading-snug text-zinc-600">
+          {flaw.description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConfidenceBadge({ value }: { value: number }) {
   // 0-1 を 5 段階の星に変換
   const stars = Math.round(value * 5);
@@ -638,6 +684,23 @@ export default function ProductDetailPage() {
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">所見</p>
               <p className="text-xs leading-relaxed">{ai.notes}</p>
+            </div>
+          )}
+
+          {/* AI 検出の傷・難あり */}
+          {Array.isArray(product.flaws) && product.flaws.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                ⚠️ AI が検出した傷・気になる箇所（{product.flaws.length}件）
+              </p>
+              <div className="space-y-1">
+                {product.flaws.map((f, i) => (
+                  <FlawRow key={i} flaw={f} />
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                ※クレーム回避のため、説明文にも自動反映されています
+              </p>
             </div>
           )}
         </Card>

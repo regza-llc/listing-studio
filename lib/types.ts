@@ -14,6 +14,12 @@ export type SoldComp = {
   condition?: string;
 };
 
+export type ProductFlaw = {
+  location: string;
+  severity: "minor" | "moderate" | "major";
+  description: string;
+};
+
 export type Product = {
   id: string;
   created_at: string;
@@ -38,6 +44,8 @@ export type Product = {
   // 落札事例（V2 リサーチ）
   sold_comps: SoldComp[] | null;
   price_confidence: number | null;
+  // 傷・難ありの自動箇条書き
+  flaws: ProductFlaw[] | null;
 };
 
 export type ProductPhoto = {
