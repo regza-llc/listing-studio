@@ -151,7 +151,9 @@ export async function smartAnalyzeProduct(
     config: {
       tools: [{ googleSearch: {} }],
       temperature: 0.3,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
+      // thinking モードの予算を絞ってトークンを出力に使う
+      thinkingConfig: { thinkingBudget: 1024 },
     },
   });
 
@@ -221,7 +223,8 @@ export async function researchProductPrice(input: {
     config: {
       tools: [{ googleSearch: {} }],
       temperature: 0.2,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
+      thinkingConfig: { thinkingBudget: 512 },
     },
   });
 
