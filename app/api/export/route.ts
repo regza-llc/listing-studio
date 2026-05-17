@@ -8,10 +8,14 @@ export const maxDuration = 300;
 const CSV_HEADER = [
   "商品ID",
   "タイトル",
-  "カテゴリ",
+  "ヤフオクカテゴリパス",
+  "商品説明文",
   "状態",
   "しまう場所",
   "開始価格",
+  "想定相場下限",
+  "想定相場上限",
+  "推奨配送方法",
   "備考",
   "写真ファイル",
   "ステータス",
@@ -52,8 +56,9 @@ export async function POST(req: NextRequest) {
     const { data: products, error: productsErr } = await supabase
       .from("products")
       .select(
-        `id, created_at, status, title, category_hint, condition,
-         storage_location, start_price, notes,
+        `id, created_at, status, title, category_hint, yahoo_category_path,
+         description, condition, storage_location, start_price,
+         suggested_price_min, suggested_price_max, shipping_hint, notes,
          product_photos ( storage_path, order_index )`,
       )
       .in("id", productIds);
@@ -104,10 +109,14 @@ export async function POST(req: NextRequest) {
         rowToCsv([
           p.id,
           p.title ?? "",
-          p.category_hint ?? "",
+          p.yahoo_category_path ?? p.category_hint ?? "",
+          p.description ?? "",
           p.condition ?? "",
           p.storage_location ?? "",
           p.start_price ?? "",
+          p.suggested_price_min ?? "",
+          p.suggested_price_max ?? "",
+          p.shipping_hint ?? "",
           p.notes ?? "",
           photoFilenames.join("|"),
           p.status,

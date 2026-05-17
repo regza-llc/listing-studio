@@ -74,10 +74,13 @@ export default function ProductDetailPage() {
   const [form, setForm] = useState({
     title: "",
     category_hint: "",
+    yahoo_category_path: "",
     condition: "",
     storage_location: "",
     start_price: "",
     notes: "",
+    description: "",
+    shipping_hint: "",
   });
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -111,10 +114,13 @@ export default function ProductDetailPage() {
     setForm({
       title: result.product.title ?? "",
       category_hint: result.product.category_hint ?? "",
+      yahoo_category_path: result.product.yahoo_category_path ?? "",
       condition: result.product.condition ?? "",
       storage_location: result.product.storage_location ?? "",
       start_price: result.product.start_price?.toString() ?? "",
       notes: result.product.notes ?? "",
+      description: result.product.description ?? "",
+      shipping_hint: result.product.shipping_hint ?? "",
     });
     setError(null);
     setLoading(false);
@@ -184,6 +190,7 @@ export default function ProductDetailPage() {
     const result = await updateProduct(product.id, {
       title: form.title.trim() || null,
       category_hint: form.category_hint.trim() || null,
+      yahoo_category_path: form.yahoo_category_path.trim() || null,
       condition: form.condition.trim() || null,
       storage_location: form.storage_location.trim() || null,
       start_price:
@@ -191,6 +198,8 @@ export default function ProductDetailPage() {
           ? Math.round(startPriceNum)
           : null,
       notes: form.notes.trim() || null,
+      description: form.description.trim() || null,
+      shipping_hint: form.shipping_hint.trim() || null,
     });
 
     if ("error" in result) {
@@ -319,6 +328,7 @@ export default function ProductDetailPage() {
     const saveResult = await updateProduct(product.id, {
       title: form.title.trim() || null,
       category_hint: form.category_hint.trim() || null,
+      yahoo_category_path: form.yahoo_category_path.trim() || null,
       condition: form.condition.trim() || null,
       storage_location: form.storage_location.trim() || null,
       start_price:
@@ -326,6 +336,8 @@ export default function ProductDetailPage() {
           ? Math.round(startPriceNum)
           : null,
       notes: form.notes.trim() || null,
+      description: form.description.trim() || null,
+      shipping_hint: form.shipping_hint.trim() || null,
       status: "ready",
     });
 
@@ -460,7 +472,10 @@ export default function ProductDetailPage() {
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <Sparkles className="size-4 text-blue-500" /> AI 推定結果
+              <Sparkles className="size-4 text-blue-500" /> AI 分析結果
+              <span className="text-[10px] font-normal text-muted-foreground">
+                画像 + Web検索の統合分析
+              </span>
             </h2>
             <Button
               variant="outline"
@@ -473,7 +488,7 @@ export default function ProductDetailPage() {
               ) : (
                 <Sparkles className="size-3.5" />
               )}
-              再 AI 推定
+              {reanalyzing ? "分析中（10秒程度）" : "再分析"}
             </Button>
           </div>
 
@@ -682,14 +697,64 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="category">カテゴリ</Label>
+          <Label htmlFor="yahoo_category_path">
+            ヤフオク公式カテゴリパス
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+              （オークタウン取込み用）
+            </span>
+          </Label>
+          <Input
+            id="yahoo_category_path"
+            value={form.yahoo_category_path}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, yahoo_category_path: e.target.value }))
+            }
+            placeholder="例: 食器・キッチン > 食器 > 洋食器 > 皿"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="category">カテゴリ（簡易・社内タグ）</Label>
           <Input
             id="category"
             value={form.category_hint}
             onChange={(e) =>
               setForm((f) => ({ ...f, category_hint: e.target.value }))
             }
-            placeholder="例: 食器・キッチン > 食器 > 洋食器 > 皿"
+            placeholder="例: 食器・キッチン"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="description">
+            出品説明文
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+              （AI生成・販売用）
+            </span>
+          </Label>
+          <Textarea
+            id="description"
+            value={form.description}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, description: e.target.value }))
+            }
+            placeholder="商品の概要 / 状態 / サイズ / 配送 / 注意事項…"
+            rows={8}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            {form.description.length} 字
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="shipping_hint">推奨配送方法</Label>
+          <Input
+            id="shipping_hint"
+            value={form.shipping_hint}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, shipping_hint: e.target.value }))
+            }
+            placeholder="例: ゆうパック60サイズ / クリックポスト"
           />
         </div>
 

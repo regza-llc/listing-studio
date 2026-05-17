@@ -22,6 +22,10 @@ export type Product = {
   price_research_summary: string | null;
   price_research_sources: PriceResearchSource[] | null;
   price_researched_at: string | null;
+  // Smart 分析で追加されたフィールド
+  description: string | null;
+  yahoo_category_path: string | null;
+  shipping_hint: string | null;
 };
 
 export type ProductPhoto = {

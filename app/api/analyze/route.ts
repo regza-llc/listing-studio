@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeProductImages } from "@/lib/gemini";
+import { smartAnalyzeProduct } from "@/lib/gemini";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_PHOTOS_TO_ANALYZE = 5;
 
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (!productId) {
       return NextResponse.json(
         { error: "product_id required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!photos || photos.length === 0) {
       return NextResponse.json(
         { error: "No photos found for product" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       if (error || !data) {
         console.error(
           `[analyze] download failed: ${photo.storage_path}`,
-          error
+          error,
         );
         continue;
       }
@@ -60,29 +60,54 @@ export async function POST(req: NextRequest) {
     if (imageBase64List.length === 0) {
       return NextResponse.json(
         { error: "Failed to download any images" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     const started = Date.now();
-    const analysis = await analyzeProductImages(imageBase64List);
+    const analysis = await smartAnalyzeProduct(imageBase64List);
     const elapsedMs = Date.now() - started;
 
     const firstTitle =
-      Array.isArray(analysis?.title_candidates) &&
+      Array.isArray(analysis.title_candidates) &&
       analysis.title_candidates.length > 0
         ? analysis.title_candidates[0]
         : null;
+
+    // 中央値があれば start_price のデフォルト値として採用（既に手入力されていない場合のみ）
+    const startPriceCandidate = analysis.price_median ?? analysis.price_min;
+
+    const { data: existing } = await supabase
+      .from("products")
+      .select("start_price")
+      .eq("id", productId)
+      .single();
+
+    const shouldAdoptPrice =
+      existing && (existing.start_price == null || existing.start_price === 0);
 
     const { error: updateErr } = await supabase
       .from("products")
       .update({
         title: firstTitle,
-        category_hint: analysis?.category_hint ?? null,
-        condition: analysis?.condition ?? null,
-        storage_location: analysis?.storage_location_hint ?? null,
+        category_hint: analysis.category_hint || null,
+        yahoo_category_path: analysis.yahoo_category_path || null,
+        condition: analysis.condition || null,
+        storage_location: analysis.storage_location_hint || null,
+        description: analysis.description || null,
+        shipping_hint: analysis.shipping_hint || null,
+        notes: analysis.notes || null,
         ai_analysis: analysis as unknown as Record<string, unknown>,
-        // AI 推定完了で直接 "ready" に。ユーザーは編集したいときだけ編集する設計。
+        // 相場情報も同じテーブルに保存
+        suggested_price_min: analysis.price_min,
+        suggested_price_max: analysis.price_max,
+        price_research_summary: analysis.price_summary || null,
+        price_research_sources: analysis.sources,
+        price_researched_at: new Date().toISOString(),
+        // 開始価格が未設定なら中央値を採用
+        ...(shouldAdoptPrice && startPriceCandidate != null
+          ? { start_price: startPriceCandidate }
+          : {}),
         status: "ready",
       })
       .eq("id", productId);
@@ -96,6 +121,7 @@ export async function POST(req: NextRequest) {
       product_id: productId,
       photos_analyzed: imageBase64List.length,
       elapsed_ms: elapsedMs,
+      adopted_price: shouldAdoptPrice ? startPriceCandidate : null,
       analysis,
     });
   } catch (err) {
