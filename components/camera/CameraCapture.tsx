@@ -7,6 +7,8 @@ import {
   Check,
   Loader2,
   RefreshCw,
+  SkipForward,
+  Tag,
   Upload,
   X,
 } from "lucide-react";
@@ -37,6 +39,22 @@ export type CameraCaptureProps = {
 const TARGET_LONG_EDGE = 1024;
 const JPEG_QUALITY = 0.92;
 
+// マルチアングル撮影ガイド（必須5アングル）
+type ShootStep = {
+  key: string;
+  label: string;
+  hint: string;
+  emoji: string;
+};
+
+const SHOOT_STEPS: ShootStep[] = [
+  { key: "front", label: "全体（正面）", hint: "商品全体が枠に収まるように", emoji: "📦" },
+  { key: "tag", label: "タグ / ラベル", hint: "ブランド名・型番が見える位置", emoji: "🏷️" },
+  { key: "back", label: "裏面 / 反対側", hint: "裏側・底・側面など", emoji: "🔄" },
+  { key: "flaw", label: "キズ / 気になる箇所", hint: "難ありがなければ近距離の質感", emoji: "🔍" },
+  { key: "detail", label: "細部・付属品", hint: "金具・ボタン・付属品など", emoji: "✨" },
+];
+
 type CameraState =
   | { kind: "idle" }
   | { kind: "requesting" }
@@ -58,6 +76,8 @@ export function CameraCapture({
   const [flash, setFlash] = useState(false);
   const [useFallback, setUseFallback] = useState(!preferWebCamera);
   const [savedCount, setSavedCount] = useState(0);
+  const [currentStepIdx, setCurrentStepIdx] = useState(0);
+  const [showGuide, setShowGuide] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -188,6 +208,10 @@ export function CameraCapture({
         processedSize: blob.size,
       };
       setPhotos((prev) => [...prev, photo]);
+      // 次の撮影ステップへ進める
+      setCurrentStepIdx((idx) =>
+        idx < SHOOT_STEPS.length ? idx + 1 : SHOOT_STEPS.length,
+      );
     } catch (err) {
       console.error("[camera] capture failed:", err);
     } finally {
@@ -206,6 +230,7 @@ export function CameraCapture({
   function clearAll() {
     photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     setPhotos([]);
+    setCurrentStepIdx(0);
   }
 
   async function handleComplete() {
@@ -418,8 +443,102 @@ export function CameraCapture({
             </span>
           )}
         </div>
-        <div className="size-10" />
+        <button
+          type="button"
+          onClick={() => setShowGuide((v) => !v)}
+          className={cn(
+            "flex size-10 items-center justify-center rounded-full backdrop-blur-sm",
+            showGuide
+              ? "bg-sky-500 text-white"
+              : "bg-black/50 text-white/70",
+          )}
+          aria-label="撮影ガイドの表示切替"
+          title="撮影ガイドの表示切替"
+        >
+          <Tag className="size-5" />
+        </button>
       </div>
+
+      {/* 撮影ガイド: 現在のステップ + 5段階チェックリスト */}
+      {showGuide && (
+        <div className="absolute inset-x-0 top-16 z-10 px-4">
+          <div className="rounded-2xl bg-black/65 p-3 backdrop-blur-md">
+            {currentStepIdx < SHOOT_STEPS.length ? (
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-full bg-sky-500 text-lg shadow-lg shadow-sky-500/30">
+                  {SHOOT_STEPS[currentStepIdx].emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-sky-300">
+                    {currentStepIdx + 1} / {SHOOT_STEPS.length}・次に撮るもの
+                  </p>
+                  <p className="truncate text-sm font-semibold text-white">
+                    {SHOOT_STEPS[currentStepIdx].label}
+                  </p>
+                  <p className="truncate text-[11px] text-white/70">
+                    {SHOOT_STEPS[currentStepIdx].hint}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentStepIdx((idx) =>
+                      Math.min(SHOOT_STEPS.length, idx + 1),
+                    )
+                  }
+                  className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-white/80"
+                  aria-label="このステップをスキップ"
+                >
+                  <SkipForward className="size-3" />
+                  スキップ
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-emerald-300">
+                <Check className="size-5" />
+                <p className="text-sm font-semibold">
+                  必須5アングル撮影完了！追加で何枚でも撮れます
+                </p>
+              </div>
+            )}
+
+            {/* チェックリスト・ドット */}
+            <div className="mt-2 flex justify-between gap-1">
+              {SHOOT_STEPS.map((s, idx) => {
+                const done = idx < currentStepIdx;
+                const active = idx === currentStepIdx;
+                return (
+                  <div
+                    key={s.key}
+                    className="flex flex-1 flex-col items-center gap-0.5"
+                  >
+                    <div
+                      className={cn(
+                        "flex size-5 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
+                        done && "bg-emerald-500 text-white",
+                        active && "bg-sky-500 text-white ring-2 ring-sky-300",
+                        !done && !active && "bg-white/15 text-white/50",
+                      )}
+                    >
+                      {done ? <Check className="size-3" /> : idx + 1}
+                    </div>
+                    <span
+                      className={cn(
+                        "text-[8px] leading-tight text-center",
+                        done && "text-emerald-300",
+                        active && "text-sky-200",
+                        !done && !active && "text-white/40",
+                      )}
+                    >
+                      {s.emoji}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* サムネストリップ */}
       {hasPhotos && (
