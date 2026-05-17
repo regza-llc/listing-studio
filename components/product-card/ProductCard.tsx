@@ -9,11 +9,31 @@ import { getPhotoSignedUrl } from "@/lib/products";
 import type { ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
 
-const STATUS_LABEL: Record<string, { label: string; variant: BadgeVariant }> = {
-  draft: { label: "下書き", variant: "neutral" },
-  reviewing: { label: "AI 推定済", variant: "info" },
-  ready: { label: "完成", variant: "success" },
-  exported: { label: "出力済", variant: "secondary" },
+const STATUS_LABEL: Record<
+  string,
+  { label: string; variant: BadgeVariant; tooltip: string }
+> = {
+  draft: {
+    label: "下書き",
+    variant: "neutral",
+    tooltip: "撮影直後 / AI 推定中。タップして確認・編集できます。",
+  },
+  // 旧 reviewing は ready と同等に表示（互換性）
+  reviewing: {
+    label: "完成",
+    variant: "success",
+    tooltip: "AI 推定完了。CSV エクスポートに進めます。",
+  },
+  ready: {
+    label: "完成",
+    variant: "success",
+    tooltip: "出品準備OK。CSV エクスポート対象です。",
+  },
+  exported: {
+    label: "出力済",
+    variant: "secondary",
+    tooltip: "CSV 書き出し済み。オークタウン取込みに使ってください。",
+  },
 };
 
 function relativeTime(iso: string) {
@@ -65,7 +85,8 @@ export function ProductCard({
   }, [firstPhoto]);
 
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
-  const isReady = product.status === "ready";
+  const isReady =
+    product.status === "ready" || product.status === "reviewing";
   const spotlightRef = useRef<HTMLDivElement>(null);
 
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
@@ -110,7 +131,11 @@ export function ProductCard({
         )}
 
         <div className="absolute left-2 top-2 flex items-center gap-1.5">
-          <Badge variant={statusInfo.variant} className="shadow-sm backdrop-blur-sm">
+          <Badge
+            variant={statusInfo.variant}
+            className="shadow-sm backdrop-blur-sm"
+            title={statusInfo.tooltip}
+          >
             {statusInfo.label}
           </Badge>
         </div>

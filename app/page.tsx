@@ -6,6 +6,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Trash2,
   X,
@@ -15,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { WorkflowGuide } from "@/components/home/WorkflowGuide";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
 import { NumberTicker } from "@/components/ui/number-ticker";
@@ -23,12 +25,11 @@ import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
 
-type StatusFilter = "all" | "draft" | "reviewing" | "ready" | "exported";
+type StatusFilter = "all" | "draft" | "ready" | "exported";
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "すべて" },
   { value: "draft", label: "下書き" },
-  { value: "reviewing", label: "AI 推定済" },
   { value: "ready", label: "完成" },
   { value: "exported", label: "出力済" },
 ];
@@ -49,6 +50,7 @@ export default function Home() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -94,13 +96,13 @@ export default function Home() {
     const counts: Record<StatusFilter, number> = {
       all: products?.length ?? 0,
       draft: 0,
-      reviewing: 0,
       ready: 0,
       exported: 0,
     };
     products?.forEach((p) => {
-      counts[p.status as StatusFilter] =
-        (counts[p.status as StatusFilter] ?? 0) + 1;
+      // 旧 "reviewing" は ready に丸める（互換性）
+      const s = p.status === "reviewing" ? "ready" : (p.status as StatusFilter);
+      counts[s] = (counts[s] ?? 0) + 1;
     });
     return counts;
   }, [products]);
@@ -118,7 +120,9 @@ export default function Home() {
     if (!products) return null;
     const q = searchQuery.trim().toLowerCase();
     return products.filter((p) => {
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      const effectiveStatus = p.status === "reviewing" ? "ready" : p.status;
+      if (statusFilter !== "all" && effectiveStatus !== statusFilter)
+        return false;
       if (categoryFilter && topCategory(p.category_hint) !== categoryFilter)
         return false;
       if (q) {
@@ -160,6 +164,39 @@ export default function Home() {
     setSelectMode(false);
     setSelectedIds(new Set());
     setExportError(null);
+  }
+
+  async function handleBulkRevertToDraft() {
+    if (selectedIds.size === 0 || reverting) return;
+    const ids = Array.from(selectedIds);
+    const targets = products?.filter(
+      (p) => ids.includes(p.id) && p.status !== "draft",
+    );
+    if (!targets || targets.length === 0) {
+      showToast("選択した商品はすべて既に下書きです", "error");
+      return;
+    }
+
+    setReverting(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("products")
+        .update({ status: "draft" })
+        .in(
+          "id",
+          targets.map((p) => p.id),
+        );
+      if (error) {
+        showToast(`下書きへ戻す処理失敗: ${error.message}`, "error");
+        return;
+      }
+      showToast(`✓ ${targets.length} 件を下書きに戻しました`);
+      exitSelectMode();
+      fetchList(true);
+    } finally {
+      setReverting(false);
+    }
   }
 
   async function handleBulkDelete() {
@@ -290,6 +327,29 @@ export default function Home() {
           </Button>
         )}
       </header>
+
+      {/* 4 ステップフロー + 次のアクションガイド */}
+      {!selectMode && products && (
+        <WorkflowGuide
+          counts={{
+            draft: statusCounts.draft,
+            ready: statusCounts.ready,
+            exported: statusCounts.exported,
+            total: products.length,
+          }}
+          onShowDrafts={() => {
+            setSearchQuery("");
+            setCategoryFilter(null);
+            setStatusFilter("draft");
+          }}
+          onStartExport={() => {
+            setSearchQuery("");
+            setCategoryFilter(null);
+            setStatusFilter("ready");
+            setSelectMode(true);
+          }}
+        />
+      )}
 
       {!selectMode && products && products.length > 0 && (
         <div className="mb-4 space-y-3">
@@ -544,8 +604,29 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={handleBulkRevertToDraft}
+                  disabled={
+                    selectedIds.size === 0 ||
+                    reverting ||
+                    deleting ||
+                    marking ||
+                    exporting
+                  }
+                  className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                  aria-label="下書きに戻す"
+                  title="選択を下書きに戻す"
+                >
+                  {reverting ? (
+                    <Loader2 className="size-5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="size-5" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={handleBulkDelete}
-                  disabled={selectedIds.size === 0 || deleting || marking || exporting}
+                  disabled={selectedIds.size === 0 || deleting || marking || exporting || reverting}
                   className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                   aria-label="選択を削除"
                 >

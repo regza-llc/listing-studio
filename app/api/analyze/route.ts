@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
         condition: analysis?.condition ?? null,
         storage_location: analysis?.storage_location_hint ?? null,
         ai_analysis: analysis as unknown as Record<string, unknown>,
-        status: "reviewing",
+        // AI 推定完了で直接 "ready" に。ユーザーは編集したいときだけ編集する設計。
+        status: "ready",
       })
       .eq("id", productId);
 

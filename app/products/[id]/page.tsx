@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ImageOff,
   Loader2,
+  RotateCcw,
   Save,
   Sparkles,
   Trash2,
@@ -39,12 +40,13 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
     label: "下書き",
     tone: "bg-zinc-100 text-zinc-700 border border-zinc-200",
   },
+  // 旧 reviewing は ready と同等に表示（互換性のため）
   reviewing: {
-    label: "AI 推定済 / 仕分け待ち",
-    tone: "bg-sky-100 text-sky-700 border border-sky-200",
+    label: "完成",
+    tone: "bg-emerald-100 text-emerald-700 border border-emerald-200",
   },
   ready: {
-    label: "✓ 仕分け完了",
+    label: "完成",
     tone: "bg-emerald-100 text-emerald-700 border border-emerald-200",
   },
   exported: {
@@ -85,6 +87,7 @@ export default function ProductDetailPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [reverting, setReverting] = useState(false);
 
   function showToast(message: string, tone: "success" | "info" = "success") {
     setToast({ message, tone });
@@ -215,6 +218,19 @@ export default function ProductDetailPage() {
     } finally {
       setReanalyzing(false);
     }
+  }
+
+  async function handleRevertToDraft() {
+    if (!product || reverting || product.status === "draft") return;
+    setReverting(true);
+    const result = await updateProduct(product.id, { status: "draft" });
+    if ("error" in result) {
+      showToast(`下書きへ戻す処理失敗: ${result.error}`, "info");
+    } else {
+      showToast("✓ 下書きに戻しました");
+      await fetchProduct();
+    }
+    setReverting(false);
   }
 
   async function handleDelete() {
@@ -540,8 +556,25 @@ export default function ProductDetailPage() {
         )}
       </Card>
 
-      <div className="fixed bottom-0 inset-x-0 bg-background border-t border-border">
+      <div className="fixed bottom-0 inset-x-0 bg-background/95 border-t border-border backdrop-blur-md">
         <div className="container mx-auto max-w-3xl px-4 py-3 space-y-2">
+          {product.status !== "draft" && (
+            <div className="flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleRevertToDraft}
+                disabled={reverting || saving}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40"
+              >
+                {reverting ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-3" />
+                )}
+                下書きに戻す
+              </button>
+            </div>
+          )}
           {product.status !== "ready" && (
             <p className="text-center text-[11px] text-muted-foreground">
               <span className="font-semibold">変更を保存</span>{" "}
