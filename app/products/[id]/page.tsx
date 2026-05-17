@@ -4,12 +4,14 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ExternalLink,
   ImageOff,
   Loader2,
   RotateCcw,
   Save,
   Sparkles,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -88,6 +90,10 @@ export default function ProductDetailPage() {
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [researchingPrice, setResearchingPrice] = useState(false);
+  const [priceResearchError, setPriceResearchError] = useState<string | null>(
+    null,
+  );
 
   function showToast(message: string, tone: "success" | "info" = "success") {
     setToast({ message, tone });
@@ -218,6 +224,43 @@ export default function ProductDetailPage() {
     } finally {
       setReanalyzing(false);
     }
+  }
+
+  async function handleResearchPrice() {
+    if (!product || researchingPrice) return;
+    if (!form.title.trim()) {
+      setPriceResearchError(
+        "先に商品タイトルを設定してください（AI 推定 or 手動入力）",
+      );
+      return;
+    }
+    setResearchingPrice(true);
+    setPriceResearchError(null);
+    try {
+      const res = await fetch("/api/research-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: product.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      await fetchProduct();
+      showToast("✓ 相場リサーチ完了");
+    } catch (e) {
+      setPriceResearchError(
+        e instanceof Error ? e.message : "相場リサーチ失敗",
+      );
+    } finally {
+      setResearchingPrice(false);
+    }
+  }
+
+  function adoptPrice(value: number | null) {
+    if (value == null) return;
+    setForm((f) => ({ ...f, start_price: String(value) }));
+    showToast(`✓ 開始価格に ¥${value.toLocaleString()} を採用`);
   }
 
   async function handleRevertToDraft() {
@@ -467,6 +510,163 @@ export default function ProductDetailPage() {
           )}
         </Card>
       )}
+
+      {/* 相場リサーチカード */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            <TrendingUp className="size-4 text-emerald-600" /> 相場リサーチ
+          </h2>
+          {product.price_researched_at && (
+            <span className="text-[10px] text-muted-foreground">
+              最終: {new Date(product.price_researched_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+
+        {priceResearchError && (
+          <div className="flex gap-1 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 size-3.5" />
+            {priceResearchError}
+          </div>
+        )}
+
+        {product.suggested_price_min || product.suggested_price_max ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xs text-emerald-700">想定相場帯</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-emerald-900 tabular-nums">
+                  ¥{product.suggested_price_min?.toLocaleString() ?? "?"}
+                </span>
+                <span className="text-emerald-700">〜</span>
+                <span className="text-2xl font-bold text-emerald-900 tabular-nums">
+                  ¥{product.suggested_price_max?.toLocaleString() ?? "?"}
+                </span>
+              </div>
+              {product.price_research_summary && (
+                <p className="mt-2 text-xs leading-relaxed text-emerald-900/80">
+                  {product.price_research_summary}
+                </p>
+              )}
+            </div>
+
+            {/* 採用ボタン */}
+            <div className="flex flex-wrap gap-2">
+              {product.suggested_price_min != null && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => adoptPrice(product.suggested_price_min)}
+                >
+                  下限 ¥{product.suggested_price_min.toLocaleString()} を採用
+                </Button>
+              )}
+              {product.suggested_price_min != null &&
+                product.suggested_price_max != null && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      adoptPrice(
+                        Math.round(
+                          (product.suggested_price_min! +
+                            product.suggested_price_max!) /
+                            2,
+                        ),
+                      )
+                    }
+                  >
+                    中央値 ¥
+                    {Math.round(
+                      (product.suggested_price_min +
+                        product.suggested_price_max) /
+                        2,
+                    ).toLocaleString()}{" "}
+                    を採用
+                  </Button>
+                )}
+              {product.suggested_price_max != null && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => adoptPrice(product.suggested_price_max)}
+                >
+                  上限 ¥{product.suggested_price_max.toLocaleString()} を採用
+                </Button>
+              )}
+            </div>
+
+            {/* 出典URL */}
+            {Array.isArray(product.price_research_sources) &&
+              product.price_research_sources.length > 0 && (
+                <details className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    参照したソース（{product.price_research_sources.length}件）
+                  </summary>
+                  <ul className="mt-2 space-y-1">
+                    {product.price_research_sources.map((s, i) => (
+                      <li key={i} className="truncate">
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+                        >
+                          <ExternalLink className="size-3 flex-shrink-0" />
+                          <span className="truncate">{s.title}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleResearchPrice}
+              disabled={researchingPrice}
+              className="w-full"
+            >
+              {researchingPrice ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <TrendingUp className="size-3.5" />
+              )}
+              再リサーチ
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              ヤフオク・メルカリ等の落札相場を AI が Web 検索して取得します（3〜5秒）
+            </p>
+            <Button
+              size="lg"
+              onClick={handleResearchPrice}
+              disabled={researchingPrice || !form.title.trim()}
+              className="w-full"
+            >
+              {researchingPrice ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> リサーチ中...
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="size-4" /> 相場を調べる
+                </>
+              )}
+            </Button>
+            {!form.title.trim() && (
+              <p className="text-[10px] text-muted-foreground">
+                先に商品タイトルを設定してください
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
 
       <Card className="p-4 space-y-4">
         <h2 className="text-sm font-semibold">編集</h2>

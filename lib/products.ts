@@ -121,6 +121,8 @@ export async function getProduct(
     .select(
       `id, created_at, updated_at, status, title, category_hint, condition,
        storage_location, start_price, ai_analysis, notes,
+       suggested_price_min, suggested_price_max, price_research_summary,
+       price_research_sources, price_researched_at,
        product_photos ( id, product_id, order_index, storage_path, uploaded_at )`
     )
     .eq("id", id)
