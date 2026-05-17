@@ -37,6 +37,36 @@ type AiAnalysis = {
   notes?: string;
 };
 
+const ANALYZE_EXPECTED_SECONDS = 15;
+
+function AnalysisProgress({ createdAt }: { createdAt: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = new Date(createdAt).getTime();
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+  const percent = Math.min(
+    100,
+    Math.round((elapsed / ANALYZE_EXPECTED_SECONDS) * 100),
+  );
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200">
+      <Loader2 className="size-3 animate-spin" />
+      <span className="tabular-nums">AI 分析中 {elapsed}s</span>
+      <span className="text-sky-500">/ 約{ANALYZE_EXPECTED_SECONDS}s</span>
+      <span className="ml-0.5 hidden h-1 w-8 overflow-hidden rounded-full bg-sky-200 sm:inline-block">
+        <span
+          className="block h-full bg-sky-500 transition-all duration-500"
+          style={{ width: `${percent}%` }}
+        />
+      </span>
+    </span>
+  );
+}
+
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   draft: {
     label: "下書き",
@@ -400,10 +430,7 @@ export default function ProductDetailPage() {
               {photosSorted.length} 枚
             </span>
             {product.status === "draft" && (
-              <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                <Loader2 className="size-3 animate-spin" />
-                AI 推定中
-              </span>
+              <AnalysisProgress createdAt={product.created_at} />
             )}
           </div>
         </div>
