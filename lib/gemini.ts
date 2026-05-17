@@ -52,6 +52,7 @@ const PRICE_RESEARCH_PROMPT_TEMPLATE = (input: {
   category_hint?: string | null;
   condition?: string | null;
   notes?: string | null;
+  additional_prompt?: string | null;
 }) => `あなたは中古品オークションの相場リサーチアシスタントです。
 以下の商品について、ヤフオク・メルカリ・ラクマ等の過去3〜6ヶ月の落札相場を Web 検索で調査してください。
 
@@ -59,7 +60,7 @@ const PRICE_RESEARCH_PROMPT_TEMPLATE = (input: {
 カテゴリ: ${input.category_hint ?? "未指定"}
 状態ランク: ${input.condition ?? "未指定"}（A=新品同様 / B=美品 / C=使用感あり / D=難あり）
 備考: ${input.notes ?? "特になし"}
-
+${input.additional_prompt ? `\n【ユーザーからの追加指示】\n${input.additional_prompt}\n` : ""}
 調査して、以下の JSON のみで回答してください（コードブロック不要・他の文章なし）:
 
 {
@@ -72,7 +73,8 @@ const PRICE_RESEARCH_PROMPT_TEMPLATE = (input: {
 注意:
 - 数値は日本円（整数）
 - 落札事例が少ない / 不明な場合は null を入れる
-- 状態ランクを考慮した相場帯にする`;
+- 状態ランクを考慮した相場帯にする
+- ユーザーからの追加指示があれば最優先で考慮する`;
 
 // =====================================================================
 // Smart 分析: 画像認識 + Google検索 Grounding + 説明文生成を 1 回で実行
@@ -214,6 +216,7 @@ export async function researchProductPrice(input: {
   category_hint?: string | null;
   condition?: string | null;
   notes?: string | null;
+  additional_prompt?: string | null;
 }): Promise<PriceResearchResult> {
   const prompt = PRICE_RESEARCH_PROMPT_TEMPLATE(input);
 

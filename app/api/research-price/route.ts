@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const productId = body?.product_id as string | undefined;
+    const additionalPrompt = (body?.additional_prompt as string | undefined)?.trim() || null;
 
     if (!productId) {
       return NextResponse.json(
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       category_hint: product.category_hint,
       condition: product.condition,
       notes: product.notes,
+      additional_prompt: additionalPrompt,
     });
     const elapsedMs = Date.now() - started;
 

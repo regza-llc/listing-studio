@@ -127,6 +127,7 @@ export default function ProductDetailPage() {
   const [priceResearchError, setPriceResearchError] = useState<string | null>(
     null,
   );
+  const [researchPrompt, setResearchPrompt] = useState("");
 
   function showToast(message: string, tone: "success" | "info" = "success") {
     setToast({ message, tone });
@@ -276,10 +277,14 @@ export default function ProductDetailPage() {
     setResearchingPrice(true);
     setPriceResearchError(null);
     try {
+      const payload: Record<string, unknown> = { product_id: product.id };
+      if (researchPrompt.trim()) {
+        payload.additional_prompt = researchPrompt.trim();
+      }
       const res = await fetch("/api/research-price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: product.id }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -287,6 +292,7 @@ export default function ProductDetailPage() {
       }
       await fetchProduct();
       showToast("✓ 相場リサーチ完了");
+      setResearchPrompt(""); // 成功後に補足プロンプトをクリア
     } catch (e) {
       setPriceResearchError(
         e instanceof Error ? e.message : "相場リサーチ失敗",
@@ -665,9 +671,28 @@ export default function ProductDetailPage() {
                 </details>
               )}
 
+            {/* 補足プロンプト入力（任意） */}
+            <details className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs open:bg-white">
+              <summary className="cursor-pointer text-zinc-600">
+                💬 補足を加えて再リサーチ（任意）
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                <Textarea
+                  value={researchPrompt}
+                  onChange={(e) => setResearchPrompt(e.target.value)}
+                  placeholder="例: 2024年モデルとして / 完全未使用品として / 限定カラーとして / 古いモデルが多めの相場で 等"
+                  rows={3}
+                  className="text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  AI に渡す追加の指示。空のままなら通常通りリサーチします。
+                </p>
+              </div>
+            </details>
+
             <Button
               size="sm"
-              variant="ghost"
+              variant={researchPrompt.trim() ? "default" : "ghost"}
               onClick={handleResearchPrice}
               disabled={researchingPrice}
               className="w-full"
@@ -677,14 +702,34 @@ export default function ProductDetailPage() {
               ) : (
                 <TrendingUp className="size-3.5" />
               )}
-              再リサーチ
+              {researchPrompt.trim() ? "補足ありで再リサーチ" : "再リサーチ"}
             </Button>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              ヤフオク・メルカリ等の落札相場を AI が Web 検索して取得します（3〜5秒）
+              ヤフオク・メルカリ等の落札相場を AI が Web 検索して取得します（5〜8秒）
             </p>
+
+            {/* 補足プロンプト入力（任意） */}
+            <details className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs open:bg-white">
+              <summary className="cursor-pointer text-zinc-600">
+                💬 補足プロンプトを追加（任意）
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                <Textarea
+                  value={researchPrompt}
+                  onChange={(e) => setResearchPrompt(e.target.value)}
+                  placeholder="例: 2024年モデルとして / 完全未使用品として / 限定カラーとして 等"
+                  rows={3}
+                  className="text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  AI に渡す追加の指示。空でも実行できます。
+                </p>
+              </div>
+            </details>
+
             <Button
               size="lg"
               onClick={handleResearchPrice}
@@ -697,7 +742,10 @@ export default function ProductDetailPage() {
                 </>
               ) : (
                 <>
-                  <TrendingUp className="size-4" /> 相場を調べる
+                  <TrendingUp className="size-4" />
+                  {researchPrompt.trim()
+                    ? "補足ありで相場を調べる"
+                    : "相場を調べる"}
                 </>
               )}
             </Button>
