@@ -6,6 +6,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -14,8 +15,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
+import { cn } from "@/lib/utils";
+
+type StatusFilter = "all" | "draft" | "reviewing" | "ready" | "exported";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "すべて" },
+  { value: "draft", label: "下書き" },
+  { value: "reviewing", label: "AI 推定済" },
+  { value: "ready", label: "完成" },
+  { value: "exported", label: "出力済" },
+];
+
+function topCategory(hint: string | null | undefined): string | null {
+  if (!hint) return null;
+  // "食器・キッチン > 食器 > 洋食器 > 皿" → "食器・キッチン"
+  const top = hint.split(/[>＞›/／]/)[0]?.trim();
+  return top || null;
+}
 
 export default function Home() {
   const [products, setProducts] = useState<ProductListItem[] | null>(null);
@@ -37,6 +57,11 @@ export default function Home() {
     setToast({ message, tone });
     setTimeout(() => setToast(null), 2500);
   }
+
+  // === 検索・フィルタ ===
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const fetchList = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
@@ -62,14 +87,53 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [products, fetchList]);
 
-  const draftCount = useMemo(
-    () => products?.filter((p) => p.status === "draft").length ?? 0,
-    [products],
-  );
-  const readyCount = useMemo(
-    () => products?.filter((p) => p.status === "ready").length ?? 0,
-    [products],
-  );
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = {
+      all: products?.length ?? 0,
+      draft: 0,
+      reviewing: 0,
+      ready: 0,
+      exported: 0,
+    };
+    products?.forEach((p) => {
+      counts[p.status as StatusFilter] =
+        (counts[p.status as StatusFilter] ?? 0) + 1;
+    });
+    return counts;
+  }, [products]);
+
+  const topCategories = useMemo(() => {
+    const set = new Set<string>();
+    products?.forEach((p) => {
+      const top = topCategory(p.category_hint);
+      if (top) set.add(top);
+    });
+    return Array.from(set).sort();
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    if (!products) return null;
+    const q = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (categoryFilter && topCategory(p.category_hint) !== categoryFilter)
+        return false;
+      if (q) {
+        const haystack = [
+          p.title ?? "",
+          p.category_hint ?? "",
+          p.notes ?? "",
+          p.storage_location ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [products, searchQuery, statusFilter, categoryFilter]);
+
+  const draftCount = statusCounts.draft;
 
   function handleSelectChange(id: string, next: boolean) {
     setSelectedIds((prev) => {
@@ -81,11 +145,11 @@ export default function Home() {
   }
 
   function toggleSelectAll() {
-    if (!products) return;
-    if (selectedIds.size === products.length) {
+    if (!filteredProducts) return;
+    if (selectedIds.size === filteredProducts.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(products.map((p) => p.id)));
+      setSelectedIds(new Set(filteredProducts.map((p) => p.id)));
     }
   }
 
@@ -222,29 +286,142 @@ export default function Home() {
       </header>
 
       {!selectMode && products && products.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 text-xs">
-          <Badge variant="neutral">{products.length} 件</Badge>
-          {draftCount > 0 && (
-            <Badge variant="info" className="gap-1">
-              <Loader2 className="size-3 animate-spin" />
-              AI 推定中 {draftCount}
-            </Badge>
+        <div className="mb-4 space-y-3">
+          {/* 検索バー */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="商品名・カテゴリ・備考で検索"
+                className="pl-9 pr-9"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+                  aria-label="検索をクリア"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => fetchList(true)}
+              disabled={refreshing}
+              aria-label="更新"
+            >
+              <RefreshCw
+                className={cn("size-4", refreshing && "animate-spin")}
+              />
+            </Button>
+          </div>
+
+          {/* ステータスフィルタ */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {STATUS_FILTERS.map((s) => {
+              const count = statusCounts[s.value] ?? 0;
+              const isActive = statusFilter === s.value;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStatusFilter(s.value)}
+                  className={cn(
+                    "flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                    isActive
+                      ? "bg-zinc-900 text-white shadow-sm"
+                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                  )}
+                >
+                  <span>{s.label}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10px]",
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-white text-zinc-500",
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* カテゴリフィルタ */}
+          {topCategories.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(null)}
+                className={cn(
+                  "flex-shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors",
+                  categoryFilter === null
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-border bg-card text-foreground hover:bg-zinc-50",
+                )}
+              >
+                すべてのカテゴリ
+              </button>
+              {topCategories.map((c) => {
+                const isActive = c === categoryFilter;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCategoryFilter(isActive ? null : c)}
+                    className={cn(
+                      "flex-shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors",
+                      isActive
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-border bg-card text-foreground hover:bg-zinc-50",
+                    )}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
           )}
-          {readyCount > 0 && (
-            <Badge variant="success">完成 {readyCount}</Badge>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto h-7 px-2 text-xs"
-            onClick={() => fetchList(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
-            />
-            更新
-          </Button>
+
+          {/* 件数表示 + フィルタ解除 */}
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>
+                <span className="font-semibold text-foreground">
+                  {filteredProducts?.length ?? 0}
+                </span>
+                <span> / {products.length} 件</span>
+              </span>
+              {draftCount > 0 && (
+                <Badge variant="info" className="gap-1">
+                  <Loader2 className="size-3 animate-spin" />
+                  AI推定中 {draftCount}
+                </Badge>
+              )}
+            </div>
+            {(searchQuery ||
+              statusFilter !== "all" ||
+              categoryFilter !== null) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setStatusFilter("all");
+                  setCategoryFilter(null);
+                }}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                フィルタを解除
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -273,9 +450,29 @@ export default function Home() {
         </div>
       )}
 
-      {products && products.length > 0 && (
+      {filteredProducts && filteredProducts.length === 0 && products && products.length > 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-zinc-100">
+            <Search className="size-5 text-zinc-500" />
+          </div>
+          <p className="text-sm font-medium">検索条件に一致する商品がありません</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setStatusFilter("all");
+              setCategoryFilter(null);
+            }}
+            className="mt-2 text-xs text-primary underline-offset-2 hover:underline"
+          >
+            フィルタを解除する
+          </button>
+        </div>
+      )}
+
+      {filteredProducts && filteredProducts.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {products.map((p) => (
+          {filteredProducts.map((p) => (
             <ProductCard
               key={p.id}
               product={p}
@@ -330,7 +527,8 @@ export default function Home() {
                     className="ml-3 text-xs text-primary underline-offset-2 hover:underline"
                     disabled={exporting || marking || deleting}
                   >
-                    {products && selectedIds.size === products.length
+                    {filteredProducts &&
+                    selectedIds.size === filteredProducts.length
                       ? "全て解除"
                       : "全て選択"}
                   </button>
