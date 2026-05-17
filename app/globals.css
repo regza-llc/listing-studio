@@ -21,12 +21,147 @@
   --color-input: oklch(0.92 0 0);
   --color-ring: oklch(0.708 0 0);
   --radius: 0.75rem;
+  --font-sans: var(--font-geist, "ui-sans-serif"), system-ui, sans-serif;
 }
 
 html,
 body {
   height: 100%;
-  background: var(--color-background);
+  background: transparent;
   color: var(--color-foreground);
   color-scheme: light;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* === Border Beam === */
+@keyframes border-beam {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+.border-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+}
+.border-beam::after {
+  content: "";
+  position: absolute;
+  width: 80px;
+  aspect-ratio: 1 / 1;
+  offset-path: rect(0 100% 100% 0 round 9999px);
+  offset-rotate: 0deg;
+  background: conic-gradient(
+    from 90deg at 50% 50%,
+    transparent 0deg,
+    rgba(99, 102, 241, 0.9) 60deg,
+    rgba(236, 72, 153, 0.9) 120deg,
+    transparent 180deg
+  );
+  filter: blur(8px);
+  animation: border-beam 4s linear infinite;
+}
+
+/* === Shimmer (AI 推定中などのテキスト) === */
+@keyframes shimmer-slide {
+  to {
+    background-position: -200% 0;
+  }
+}
+.shiny-text {
+  background: linear-gradient(
+    90deg,
+    currentColor 0%,
+    rgba(255, 255, 255, 0.85) 50%,
+    currentColor 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-slide 2.5s linear infinite;
+}
+
+/* === Spotlight Card (hover で光るエフェクト) === */
+.spotlight-card {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(99, 102, 241, 0.12),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 1;
+}
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+/* === Gradient Border (完成カード用) === */
+.gradient-border-emerald {
+  position: relative;
+  background-clip: padding-box;
+}
+.gradient-border-emerald::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.8),
+    rgba(20, 184, 166, 0.4) 50%,
+    rgba(16, 185, 129, 0.8)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* === Soft pulse (AI 推定中の subtle 装飾) === */
+@keyframes soft-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.soft-pulse {
+  animation: soft-pulse 1.8s ease-in-out infinite;
+}
+
+/* === Fade in (ページ遷移時) === */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
 }

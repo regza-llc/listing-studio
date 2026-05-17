@@ -2,7 +2,7 @@
 
 import { ImageOff, Images } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getPhotoSignedUrl } from "@/lib/products";
@@ -65,16 +65,35 @@ export function ProductCard({
   }, [firstPhoto]);
 
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
+  const isReady = product.status === "ready";
+  const spotlightRef = useRef<HTMLDivElement>(null);
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const el = spotlightRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
+    el.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
+  }
 
   const innerClassName = cn(
-    "block rounded-2xl bg-card transition-all",
+    "block rounded-2xl bg-card transition-all duration-300",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    selectMode ? "cursor-pointer" : "hover:-translate-y-0.5",
+    selectMode
+      ? "cursor-pointer"
+      : "hover:-translate-y-1 hover:shadow-xl hover:shadow-zinc-900/10",
     selected && "ring-2 ring-primary ring-offset-2",
   );
 
   const inner = (
-    <div className="group relative overflow-hidden rounded-2xl border border-border/60 bg-zinc-100 shadow-sm">
+    <div
+      ref={spotlightRef}
+      onMouseMove={handleMouseMove}
+      className={cn(
+        "spotlight-card group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/70",
+        isReady && "gradient-border-emerald",
+      )}
+    >
       <div className="relative aspect-square w-full">
         {thumbUrl && !thumbError ? (
           // eslint-disable-next-line @next/next/no-img-element

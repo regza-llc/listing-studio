@@ -15,7 +15,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { ShinyText } from "@/components/ui/shiny-text";
 import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
@@ -264,12 +267,14 @@ export default function Home() {
   }
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 py-6 pb-32">
+    <main className="container mx-auto max-w-5xl px-4 py-6 pb-32 animate-fade-up">
       <header className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">listing-studio</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            撮って AI に判別してもらう出品ワークフロー
+          <h1 className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-500 bg-clip-text text-[28px] font-bold leading-tight tracking-tight text-transparent">
+            listing-studio
+          </h1>
+          <p className="mt-1 text-sm font-medium text-zinc-700">
+            3秒で、撮ったものが出品データになる。
           </p>
         </div>
 
@@ -278,6 +283,7 @@ export default function Home() {
             variant="outline"
             size="sm"
             onClick={() => setSelectMode(true)}
+            className="rounded-full"
           >
             <CheckCircle2 className="size-4" />
             選択
@@ -290,18 +296,18 @@ export default function Home() {
           {/* 検索バー */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="商品名・カテゴリ・備考で検索"
-                className="pl-9 pr-9"
+                className="h-11 rounded-full border-zinc-200 bg-white/80 pl-10 pr-10 text-sm shadow-sm backdrop-blur-sm placeholder:text-zinc-400 focus-visible:border-zinc-300 focus-visible:ring-zinc-300"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+                  className="absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
                   aria-label="検索をクリア"
                 >
                   <X className="size-3.5" />
@@ -314,6 +320,7 @@ export default function Home() {
               onClick={() => fetchList(true)}
               disabled={refreshing}
               aria-label="更新"
+              className="size-11 rounded-full bg-white/60 backdrop-blur-sm hover:bg-white"
             >
               <RefreshCw
                 className={cn("size-4", refreshing && "animate-spin")}
@@ -332,22 +339,22 @@ export default function Home() {
                   type="button"
                   onClick={() => setStatusFilter(s.value)}
                   className={cn(
-                    "flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                    "group relative flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200",
                     isActive
-                      ? "bg-zinc-900 text-white shadow-sm"
-                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                      ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20"
+                      : "bg-white/70 text-zinc-700 ring-1 ring-zinc-200 backdrop-blur-sm hover:bg-white hover:ring-zinc-300",
                   )}
                 >
                   <span>{s.label}</span>
                   <span
                     className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px]",
+                      "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
                       isActive
                         ? "bg-white/20 text-white"
-                        : "bg-white text-zinc-500",
+                        : "bg-zinc-100 text-zinc-500",
                     )}
                   >
-                    {count}
+                    <NumberTicker value={count} />
                   </span>
                 </button>
               );
@@ -394,16 +401,16 @@ export default function Home() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <span>
-                <span className="font-semibold text-foreground">
-                  {filteredProducts?.length ?? 0}
+                <span className="font-semibold tabular-nums text-foreground">
+                  <NumberTicker value={filteredProducts?.length ?? 0} />
                 </span>
                 <span> / {products.length} 件</span>
               </span>
               {draftCount > 0 && (
-                <Badge variant="info" className="gap-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200">
                   <Loader2 className="size-3 animate-spin" />
-                  AI推定中 {draftCount}
-                </Badge>
+                  <ShinyText>AI 推定中 {draftCount}</ShinyText>
+                </span>
               )}
             </div>
             {(searchQuery ||
@@ -439,13 +446,16 @@ export default function Home() {
       )}
 
       {!error && products?.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
-          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-zinc-100">
-            <Plus className="size-5 text-zinc-500" />
+        <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/60 p-12 text-center backdrop-blur-sm">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-zinc-900 to-zinc-700 text-white shadow-lg">
+            <Plus className="size-6" />
           </div>
-          <p className="text-sm font-medium">まだ商品がありません</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            右下の「+」ボタンから撮影を始めてください
+          <p className="text-base font-semibold tracking-tight">
+            最初の商品を撮影しよう
+          </p>
+          <p className="mt-1.5 text-xs text-zinc-500">
+            右下の <span className="font-semibold">＋</span>{" "}
+            ボタンから連続撮影で始めます
           </p>
         </div>
       )}
@@ -484,18 +494,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* 通常モード: FAB */}
+      {/* 通常モード: FAB（Border Beam 装飾付き） */}
       {!selectMode && (
-        <Button
-          asChild
-          size="lg"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full p-0 shadow-xl"
+        <Link
+          href="/products/new"
           aria-label="新しい商品を追加"
+          className="group fixed bottom-6 right-6 flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
         >
-          <Link href="/products/new">
-            <Plus className="size-6" />
-          </Link>
-        </Button>
+          <BorderBeam />
+          <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
+        </Link>
       )}
 
       {/* 選択モード: 下部ツールバー */}
