@@ -2,7 +2,9 @@
 
 import {
   CheckCircle2,
+  Columns3,
   Download,
+  LayoutGrid,
   Loader2,
   Plus,
   RefreshCw,
@@ -16,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { KanbanView } from "@/components/home/KanbanView";
 import { WorkflowGuide } from "@/components/home/WorkflowGuide";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
@@ -67,6 +70,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
+  // === 表示モード ===
+  const [viewMode, setViewMode] = useState<"grid" | "kanban">("grid");
 
   const fetchList = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
@@ -316,15 +322,47 @@ export default function Home() {
         </div>
 
         {!selectMode && products && products.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectMode(true)}
-            className="rounded-full"
-          >
-            <CheckCircle2 className="size-4" />
-            選択
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <div className="flex rounded-full bg-zinc-100 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-full transition-colors",
+                  viewMode === "grid"
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700",
+                )}
+                aria-label="グリッド表示"
+                title="グリッド表示"
+              >
+                <LayoutGrid className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("kanban")}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-full transition-colors",
+                  viewMode === "kanban"
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700",
+                )}
+                aria-label="かんばん表示"
+                title="かんばん表示"
+              >
+                <Columns3 className="size-3.5" />
+              </button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectMode(true)}
+              className="rounded-full"
+            >
+              <CheckCircle2 className="size-4" />
+              選択
+            </Button>
+          </div>
         )}
       </header>
 
@@ -540,19 +578,23 @@ export default function Home() {
         </div>
       )}
 
-      {filteredProducts && filteredProducts.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {filteredProducts.map((p) => (
-            <ProductCard
-              key={p.id}
-              product={p}
-              selectMode={selectMode}
-              selected={selectedIds.has(p.id)}
-              onSelectChange={handleSelectChange}
-            />
-          ))}
-        </div>
-      )}
+      {filteredProducts &&
+        filteredProducts.length > 0 &&
+        (viewMode === "kanban" && !selectMode ? (
+          <KanbanView products={filteredProducts} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {filteredProducts.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                selectMode={selectMode}
+                selected={selectedIds.has(p.id)}
+                onSelectChange={handleSelectChange}
+              />
+            ))}
+          </div>
+        ))}
 
       {/* 通常モード: FAB（Border Beam 装飾付き） */}
       {!selectMode && (
