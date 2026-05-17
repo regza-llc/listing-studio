@@ -46,6 +46,7 @@ export type Product = {
   // Smart 分析で追加されたフィールド
   description: string | null;
   yahoo_category_path: string | null;
+  yahoo_category_id: string | null;
   shipping_hint: string | null;
   // 落札事例（V2 リサーチ）
   sold_comps: SoldComp[] | null;

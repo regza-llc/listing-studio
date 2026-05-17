@@ -123,7 +123,7 @@ export async function getProduct(
        storage_location, start_price, ai_analysis, notes,
        suggested_price_min, suggested_price_max, price_research_summary,
        price_research_sources, price_researched_at,
-       description, yahoo_category_path, shipping_hint,
+       description, yahoo_category_path, yahoo_category_id, shipping_hint,
        sold_comps, price_confidence, flaws, dimensions,
        product_photos ( id, product_id, order_index, storage_path, uploaded_at )`
     )

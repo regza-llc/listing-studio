@@ -181,3 +181,155 @@ export function escapeAuctownCsvCell(value: unknown): string {
 export function rowToAuctownCsv(values: unknown[]): string {
   return values.map(escapeAuctownCsvCell).join(",");
 }
+
+/**
+ * 商品 1 件分の動的な6列分（AI 由来）と固定11列分を別オブジェクトで返す。
+ *
+ * UI プレビュー / CSV 出力 / 商品詳細統合の3か所で同じ計算ロジックを共有する。
+ */
+export type AuctownProductLike = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  condition?: string | null;
+  start_price?: number | null;
+  suggested_price_min?: number | null;
+  yahoo_category_id?: string | null;
+  yahoo_category_path?: string | null;
+  dimensions?: unknown;
+  flaws?: unknown;
+};
+
+export type AuctownDynamicRow = {
+  category_id: string;
+  title: string;
+  description: string;
+  start_price: string;
+  condition_label: string;
+  image_filenames: string[];
+};
+
+export type AuctownFixedRow = {
+  quantity: string;
+  duration_days: string;
+  end_time_hour: string;
+  returns: string;
+  seller_prefecture: string;
+  shipping_payer: string;
+  payment_method: string;
+  yahoo_kantan: string;
+  shipping_days: string;
+  auto_extension: string;
+  early_close: string;
+};
+
+export type AuctownRowWarning = {
+  product_id: string;
+  field: "category_id" | "title" | "description" | "start_price" | "images";
+  message: string;
+};
+
+export type AuctownRowBuildResult = {
+  dynamic: AuctownDynamicRow;
+  fixed: AuctownFixedRow;
+  warnings: AuctownRowWarning[];
+  /** 26列分の最終セル配列（CSV/プレビュー両方で使用） */
+  cells: string[];
+};
+
+export function buildAuctownRow(
+  product: AuctownProductLike,
+  imageFilenames: string[],
+): AuctownRowBuildResult {
+  const warnings: AuctownRowWarning[] = [];
+
+  const categoryId = (product.yahoo_category_id ?? "").toString().trim();
+  if (!categoryId) {
+    warnings.push({
+      product_id: product.id,
+      field: "category_id",
+      message: `カテゴリID が未取得（タイトル: ${product.title ?? "(無題)"}）`,
+    });
+  }
+
+  const title = product.title ?? "";
+  if (!title.trim()) {
+    warnings.push({
+      product_id: product.id,
+      field: "title",
+      message: "タイトル未設定",
+    });
+  }
+
+  const description = buildDescription({
+    description: product.description,
+    dimensions: product.dimensions,
+    flaws: product.flaws,
+    notes: product.notes,
+  });
+  if (!description.trim()) {
+    warnings.push({
+      product_id: product.id,
+      field: "description",
+      message: "説明文未生成",
+    });
+  }
+
+  const startPriceValue =
+    product.start_price ?? product.suggested_price_min ?? null;
+  const startPrice = formatStartPrice(startPriceValue);
+  if (!startPrice) {
+    warnings.push({
+      product_id: product.id,
+      field: "start_price",
+      message: "開始価格が未設定（0 円・null は出力不可）",
+    });
+  }
+
+  if (imageFilenames.length === 0) {
+    warnings.push({
+      product_id: product.id,
+      field: "images",
+      message: "画像が 0 枚（ヤフオク出品には最低 1 枚必要）",
+    });
+  }
+
+  const dynamic: AuctownDynamicRow = {
+    category_id: categoryId,
+    title,
+    description,
+    start_price: startPrice,
+    condition_label: mapConditionToYahooLabel(product.condition),
+    image_filenames: imageFilenames.slice(0, AUCTOWN_IMAGE_SLOTS),
+  };
+
+  const fixed: AuctownFixedRow = { ...AUCTOWN_DEFAULTS };
+
+  const imageCells: string[] = Array.from(
+    { length: AUCTOWN_IMAGE_SLOTS },
+    (_, i) => imageFilenames[i] ?? "",
+  );
+
+  const cells: string[] = [
+    dynamic.category_id, // 1. カテゴリ
+    dynamic.title, // 2. タイトル
+    dynamic.description, // 3. 説明
+    dynamic.start_price, // 4. 開始価格
+    fixed.quantity, // 5. 個数
+    fixed.duration_days, // 6. 開催期間
+    fixed.end_time_hour, // 7. 終了時間
+    dynamic.condition_label, // 8. 商品の状態
+    fixed.returns, // 9. 返品の可否
+    fixed.seller_prefecture, // 10. 商品発送元の都道府県
+    fixed.shipping_payer, // 11. 送料負担
+    fixed.payment_method, // 12. 代金支払い
+    fixed.yahoo_kantan, // 13. yahoo!簡単決済
+    fixed.shipping_days, // 14. 発送までの日数
+    fixed.auto_extension, // 15. 自動延長
+    fixed.early_close, // 16. 早期終了
+    ...imageCells, // 17〜26. 画像1〜10
+  ];
+
+  return { dynamic, fixed, warnings, cells };
+}

@@ -5,9 +5,7 @@ import {
   AUCTOWN_DEFAULTS,
   AUCTOWN_IMAGE_SLOTS,
   buildAuctownImageFilename,
-  buildDescription,
-  formatStartPrice,
-  mapConditionToYahooLabel,
+  buildAuctownRow,
   rowToAuctownCsv,
 } from "@/lib/auctown";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -86,51 +84,11 @@ export async function POST(req: NextRequest) {
         imageFilenames.push(filename);
       }
 
-      // 画像10枠分のセル（足りない分は空文字）
-      const imageCells: string[] = Array.from(
-        { length: AUCTOWN_IMAGE_SLOTS },
-        (_, i) => imageFilenames[i] ?? "",
-      );
-
-      const categoryId = (p.yahoo_category_id ?? "").toString().trim();
-      if (!categoryId) {
-        warnings.push(
-          `商品 ${p.id} のカテゴリ ID が未取得（タイトル: ${p.title ?? "(無題)"} ）。CSVの「カテゴリ」列は空欄です。`,
-        );
+      const row = buildAuctownRow(p, imageFilenames);
+      for (const w of row.warnings) {
+        warnings.push(`商品 ${w.product_id}: ${w.message}`);
       }
-
-      const description = buildDescription({
-        description: p.description,
-        dimensions: p.dimensions,
-        flaws: p.flaws,
-        notes: p.notes,
-      });
-
-      // start_price 未設定なら相場下限を使う
-      const startPrice =
-        p.start_price ?? p.suggested_price_min ?? null;
-
-      csvLines.push(
-        rowToAuctownCsv([
-          categoryId, // 1. カテゴリ
-          p.title ?? "", // 2. タイトル
-          description, // 3. 説明
-          formatStartPrice(startPrice), // 4. 開始価格
-          AUCTOWN_DEFAULTS.quantity, // 5. 個数
-          AUCTOWN_DEFAULTS.duration_days, // 6. 開催期間
-          AUCTOWN_DEFAULTS.end_time_hour, // 7. 終了時間
-          mapConditionToYahooLabel(p.condition), // 8. 商品の状態
-          AUCTOWN_DEFAULTS.returns, // 9. 返品の可否
-          AUCTOWN_DEFAULTS.seller_prefecture, // 10. 商品発送元の都道府県
-          AUCTOWN_DEFAULTS.shipping_payer, // 11. 送料負担
-          AUCTOWN_DEFAULTS.payment_method, // 12. 代金支払い
-          AUCTOWN_DEFAULTS.yahoo_kantan, // 13. yahoo!簡単決済
-          AUCTOWN_DEFAULTS.shipping_days, // 14. 発送までの日数
-          AUCTOWN_DEFAULTS.auto_extension, // 15. 自動延長
-          AUCTOWN_DEFAULTS.early_close, // 16. 早期終了
-          ...imageCells, // 17〜26. 画像1〜10
-        ]),
-      );
+      csvLines.push(rowToAuctownCsv(row.cells));
     }
 
     // UTF-8 BOM + CRLF（Excel/オークタウン両方で読める）

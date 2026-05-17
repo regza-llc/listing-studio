@@ -14,6 +14,7 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
+import { AuctownPreviewCard } from "@/components/product-detail/AuctownPreviewCard";
 import { DimensionInput } from "@/components/dimension-input/DimensionInput";
 import type { Dimension } from "@/lib/types";
 import Link from "next/link";
@@ -939,6 +940,27 @@ export default function ProductDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* オークタウン CSV プレビュー */}
+      <AuctownPreviewCard
+        product={{
+          id: product.id,
+          title: form.title || product.title,
+          description: product.description,
+          notes: form.notes || product.notes,
+          condition: form.condition || product.condition,
+          start_price:
+            form.start_price === ""
+              ? null
+              : Number(form.start_price) || product.start_price,
+          suggested_price_min: product.suggested_price_min,
+          yahoo_category_id: product.yahoo_category_id,
+          yahoo_category_path: form.yahoo_category_path || product.yahoo_category_path,
+          dimensions,
+          flaws: product.flaws,
+        }}
+        photoCount={photosSorted.length}
+      />
 
       <Card className="p-4 space-y-4">
         <h2 className="text-sm font-semibold">編集</h2>

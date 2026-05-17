@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CsvPreviewModal } from "@/components/export/CsvPreviewModal";
 import { KanbanView } from "@/components/home/KanbanView";
 import { WorkflowGuide } from "@/components/home/WorkflowGuide";
 import { BorderBeam } from "@/components/ui/border-beam";
@@ -57,6 +58,7 @@ export default function Home() {
   const [reverting, setReverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -277,7 +279,13 @@ export default function Home() {
     }
   }
 
-  async function handleExport() {
+  function handleExportClick() {
+    if (selectedIds.size === 0 || exporting) return;
+    setExportError(null);
+    setPreviewOpen(true);
+  }
+
+  async function confirmExport() {
     if (selectedIds.size === 0 || exporting) return;
     setExporting(true);
     setExportError(null);
@@ -296,11 +304,12 @@ export default function Home() {
       const a = document.createElement("a");
       const today = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `roka_export_${today}.zip`;
+      a.download = `auctown_${today}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      setPreviewOpen(false);
       exitSelectMode();
       fetchList(true);
     } catch (e) {
@@ -725,7 +734,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   className="flex-1"
-                  onClick={handleExport}
+                  onClick={handleExportClick}
                   disabled={selectedIds.size === 0 || exporting || marking || deleting}
                 >
                   {exporting ? (
@@ -733,7 +742,7 @@ export default function Home() {
                   ) : (
                     <Download className="size-4" />
                   )}
-                  {exporting ? "出力中..." : "エクスポート"}
+                  {exporting ? "出力中..." : "プレビュー → エクスポート"}
                 </Button>
               </div>
             </div>
@@ -760,6 +769,16 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <CsvPreviewModal
+        open={previewOpen}
+        productIds={previewOpen ? Array.from(selectedIds) : []}
+        onClose={() => {
+          if (!exporting) setPreviewOpen(false);
+        }}
+        onConfirm={confirmExport}
+        confirming={exporting}
+      />
     </main>
   );
 }
