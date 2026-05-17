@@ -39,12 +39,24 @@ export type PriceResearchSource = {
   title: string;
 };
 
+export type SoldComp = {
+  title: string;
+  price: number;
+  url?: string;
+  sold_at?: string;
+  marketplace?: "yahoo" | "mercari" | "rakuma" | "other";
+  condition?: string;
+};
+
 export type PriceResearchResult = {
   summary: string;
   min: number | null;
   max: number | null;
   median: number | null;
   sources: PriceResearchSource[];
+  // V2 追加: 落札事例と信頼度
+  comps: SoldComp[];
+  confidence: number; // 0-1
 };
 
 const PRICE_RESEARCH_PROMPT_TEMPLATE = (input: {
@@ -54,7 +66,8 @@ const PRICE_RESEARCH_PROMPT_TEMPLATE = (input: {
   notes?: string | null;
   additional_prompt?: string | null;
 }) => `あなたは中古品オークションの相場リサーチアシスタントです。
-以下の商品について、ヤフオク・メルカリ・ラクマ等の過去3〜6ヶ月の落札相場を Web 検索で調査してください。
+ヤフオク（auctions.yahoo.co.jp）・メルカリ（mercari.com / jp.mercari.com）・ラクマ（fril.jp）の
+**実際の落札事例**を Web 検索で5〜10件探し、相場帯を算出してください。
 
 商品名: ${input.title}
 カテゴリ: ${input.category_hint ?? "未指定"}
@@ -64,15 +77,28 @@ ${input.additional_prompt ? `\n【ユーザーからの追加指示】\n${input.
 調査して、以下の JSON のみで回答してください（コードブロック不要・他の文章なし）:
 
 {
+  "comps": [
+    { "title": "落札商品名（短く）", "price": 4800, "url": "https://...", "marketplace": "yahoo", "condition": "B", "sold_at": "2026-04-15" },
+    { "title": "...", "price": 5200, "url": "...", "marketplace": "mercari" },
+    ... 5〜10件
+  ],
   "min": 3500,
   "max": 6800,
   "median": 5000,
-  "summary": "落札相場の説明（120字以内）。状態ランク・希少性・季節要因等にも触れる。"
+  "summary": "落札相場の説明（120字以内）。状態ランク・希少性・季節要因等にも触れる。",
+  "confidence": 0.7
 }
 
 注意:
-- 数値は日本円（整数）
-- 落札事例が少ない / 不明な場合は null を入れる
+- 数値はすべて日本円（整数）
+- marketplace は "yahoo" / "mercari" / "rakuma" / "other" のいずれか
+- url は実際の落札ページ・商品ページの URL（取得できなければ omit）
+- sold_at は YYYY-MM-DD 形式（不明なら omit）
+- confidence は 0.0〜1.0 で「相場推定の信頼度」を返す
+  - 0.9+: 同一商品の落札事例が5件以上見つかった
+  - 0.5〜0.8: 類似商品の事例が複数 or 同一商品が少数
+  - 0.0〜0.4: 事例ほぼなし・推測ベース
+- 落札事例が見つからない場合は comps を空配列、min/max/median を null、confidence を 0.2 程度に
 - 状態ランクを考慮した相場帯にする
 - ユーザーからの追加指示があれば最優先で考慮する`;
 
@@ -243,6 +269,15 @@ export async function researchProductPrice(input: {
     max?: number | null;
     median?: number | null;
     summary?: string;
+    confidence?: number;
+    comps?: Array<{
+      title?: string;
+      price?: number;
+      url?: string;
+      marketplace?: string;
+      condition?: string;
+      sold_at?: string;
+    }>;
   } = {};
 
   // JSON 取り出し（先頭の { から最後の } まで）
@@ -269,7 +304,39 @@ export async function researchProductPrice(input: {
     .map((c) => c.web)
     .filter((w): w is { uri: string; title?: string } => !!w?.uri)
     .map((w) => ({ url: w.uri, title: w.title ?? w.uri }))
-    .slice(0, 6);
+    .slice(0, 8);
+
+  type ParsedComp = {
+    title?: string;
+    price?: number;
+    url?: string;
+    sold_at?: string;
+    marketplace?: string;
+    condition?: string;
+  };
+  const comps: SoldComp[] = Array.isArray(parsed.comps)
+    ? (parsed.comps as ParsedComp[])
+        .filter(
+          (c): c is ParsedComp & { title: string; price: number } =>
+            typeof c.title === "string" &&
+            typeof c.price === "number" &&
+            c.price > 0,
+        )
+        .map((c) => ({
+          title: c.title,
+          price: c.price,
+          url: c.url,
+          sold_at: c.sold_at,
+          marketplace: (c.marketplace as SoldComp["marketplace"]) ?? "other",
+          condition: c.condition,
+        }))
+        .slice(0, 12)
+    : [];
+
+  // confidence は数値範囲チェック
+  let confidence =
+    typeof parsed.confidence === "number" ? parsed.confidence : 0.5;
+  confidence = Math.max(0, Math.min(1, confidence));
 
   return {
     summary: parsed.summary ?? rawText.slice(0, 200),
@@ -277,6 +344,8 @@ export async function researchProductPrice(input: {
     max: typeof parsed.max === "number" ? parsed.max : null,
     median: typeof parsed.median === "number" ? parsed.median : null,
     sources,
+    comps,
+    confidence,
   };
 }
 

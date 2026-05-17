@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
         price_research_summary: result.summary,
         price_research_sources: result.sources,
         price_researched_at: new Date().toISOString(),
+        sold_comps: result.comps,
+        price_confidence: result.confidence,
       })
       .eq("id", productId);
 

@@ -39,6 +39,90 @@ type AiAnalysis = {
 
 const ANALYZE_EXPECTED_SECONDS = 15;
 
+type SoldCompType = {
+  title: string;
+  price: number;
+  url?: string;
+  sold_at?: string;
+  marketplace?: string;
+  condition?: string;
+};
+
+const MARKETPLACE_LABEL: Record<string, { label: string; color: string }> = {
+  yahoo: { label: "ヤフオク", color: "bg-red-100 text-red-700 border-red-200" },
+  mercari: { label: "メルカリ", color: "bg-rose-100 text-rose-700 border-rose-200" },
+  rakuma: { label: "ラクマ", color: "bg-orange-100 text-orange-700 border-orange-200" },
+  other: { label: "その他", color: "bg-zinc-100 text-zinc-700 border-zinc-200" },
+};
+
+function SoldCompRow({ comp }: { comp: SoldCompType }) {
+  const mp =
+    MARKETPLACE_LABEL[comp.marketplace ?? "other"] ?? MARKETPLACE_LABEL.other;
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 px-2 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-block rounded px-1 py-0.5 text-[9px] font-semibold leading-none border ${mp.color}`}
+          >
+            {mp.label}
+          </span>
+          {comp.condition && (
+            <span className="rounded bg-zinc-100 px-1 py-0.5 text-[9px] font-semibold leading-none text-zinc-600">
+              {comp.condition}
+            </span>
+          )}
+          {comp.sold_at && (
+            <span className="text-[10px] text-zinc-400">{comp.sold_at}</span>
+          )}
+        </div>
+        <p className="mt-0.5 truncate text-xs text-zinc-700">
+          {comp.url ? (
+            <a
+              href={comp.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              {comp.title}
+            </a>
+          ) : (
+            comp.title
+          )}
+        </p>
+      </div>
+      <span className="flex-shrink-0 text-sm font-bold tabular-nums text-emerald-700">
+        ¥{comp.price.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+function ConfidenceBadge({ value }: { value: number }) {
+  // 0-1 を 5 段階の星に変換
+  const stars = Math.round(value * 5);
+  const label =
+    value >= 0.8 ? "高" : value >= 0.5 ? "中" : value >= 0.3 ? "低" : "推測";
+  const colorClass =
+    value >= 0.8
+      ? "text-emerald-700 bg-emerald-100 border-emerald-200"
+      : value >= 0.5
+        ? "text-sky-700 bg-sky-100 border-sky-200"
+        : "text-amber-700 bg-amber-100 border-amber-200";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass}`}
+      title={`信頼度: ${label}（${Math.round(value * 100)}%）`}
+    >
+      <span aria-hidden>
+        {"★".repeat(stars)}
+        <span className="opacity-30">{"★".repeat(5 - stars)}</span>
+      </span>
+      <span>信頼度 {label}</span>
+    </span>
+  );
+}
+
 function AnalysisProgress({ createdAt }: { createdAt: string }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -582,8 +666,11 @@ export default function ProductDetailPage() {
         {product.suggested_price_min || product.suggested_price_max ? (
           <div className="space-y-3">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-              <div className="flex items-baseline gap-1.5">
+              <div className="flex items-center justify-between">
                 <span className="text-xs text-emerald-700">想定相場帯</span>
+                {typeof product.price_confidence === "number" && (
+                  <ConfidenceBadge value={product.price_confidence} />
+                )}
               </div>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-emerald-900 tabular-nums">
@@ -594,12 +681,33 @@ export default function ProductDetailPage() {
                   ¥{product.suggested_price_max?.toLocaleString() ?? "?"}
                 </span>
               </div>
+              {Array.isArray(product.sold_comps) &&
+                product.sold_comps.length > 0 && (
+                  <p className="mt-1 text-[11px] text-emerald-700">
+                    {product.sold_comps.length} 件の落札事例から推定
+                  </p>
+                )}
               {product.price_research_summary && (
                 <p className="mt-2 text-xs leading-relaxed text-emerald-900/80">
                   {product.price_research_summary}
                 </p>
               )}
             </div>
+
+            {/* 落札事例リスト */}
+            {Array.isArray(product.sold_comps) &&
+              product.sold_comps.length > 0 && (
+                <details className="rounded-lg border border-zinc-200 bg-white p-2 text-xs">
+                  <summary className="cursor-pointer font-semibold text-zinc-700">
+                    📊 落札事例 {product.sold_comps.length} 件を見る
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {product.sold_comps.map((c, i) => (
+                      <SoldCompRow key={i} comp={c} />
+                    ))}
+                  </div>
+                </details>
+              )}
 
             {/* 採用ボタン */}
             <div className="flex flex-wrap gap-2">

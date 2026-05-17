@@ -5,6 +5,15 @@ export type PriceResearchSource = {
   title: string;
 };
 
+export type SoldComp = {
+  title: string;
+  price: number;
+  url?: string;
+  sold_at?: string;
+  marketplace?: "yahoo" | "mercari" | "rakuma" | "other";
+  condition?: string;
+};
+
 export type Product = {
   id: string;
   created_at: string;
@@ -26,6 +35,9 @@ export type Product = {
   description: string | null;
   yahoo_category_path: string | null;
   shipping_hint: string | null;
+  // 落札事例（V2 リサーチ）
+  sold_comps: SoldComp[] | null;
+  price_confidence: number | null;
 };
 
 export type ProductPhoto = {
