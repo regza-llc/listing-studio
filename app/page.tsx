@@ -597,26 +597,40 @@ export default function Home() {
           </div>
         ))}
 
-      {/* 通常モード: FAB 2つ（仕入れ前査定 + 撮影） */}
+      {/* 通常モード: FAB 2つ + 使い分けガイド付き */}
       {!selectMode && (
         <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
-          <Link
-            href="/worth-it"
-            aria-label="仕入れ前査定"
-            title="仕入れ前査定（出品せずに相場をチェック）"
-            className="group relative flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xl shadow-emerald-600/30 transition-transform duration-200 hover:scale-105 active:scale-95"
-          >
-            <Sparkles className="size-4" />
-            仕入れ前査定
-          </Link>
-          <Link
-            href="/products/new"
-            aria-label="新しい商品を追加"
-            className="group relative flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
-          >
-            <BorderBeam />
-            <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
-          </Link>
+          {/* 仕入れ前査定（買取判断用） */}
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 shadow-md ring-1 ring-emerald-200 backdrop-blur-sm">
+              買取判断のとき
+            </span>
+            <Link
+              href="/worth-it"
+              aria-label="仕入れ前査定"
+              title="仕入れ前査定: 出品せずに相場と粗利を15秒チェック（買取判断・店頭で使う）"
+              className="group relative flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xl shadow-emerald-600/30 transition-transform duration-200 hover:scale-105 active:scale-95"
+            >
+              <Sparkles className="size-4" />
+              仕入れ前査定
+            </Link>
+          </div>
+
+          {/* 通常の出品（在庫出品用） */}
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-zinc-700 shadow-md ring-1 ring-zinc-200 backdrop-blur-sm">
+              出品準備のとき
+            </span>
+            <Link
+              href="/products/new"
+              aria-label="新しい商品を追加"
+              title="通常の出品: 在庫を5アングル撮影してCSV取込み用データを作る（おきちゃん用）"
+              className="group relative flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
+            >
+              <BorderBeam />
+              <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
+            </Link>
+          </div>
         </div>
       )}
 
