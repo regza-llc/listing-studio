@@ -10,6 +10,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -596,16 +597,27 @@ export default function Home() {
           </div>
         ))}
 
-      {/* 通常モード: FAB（Border Beam 装飾付き） */}
+      {/* 通常モード: FAB 2つ（仕入れ前査定 + 撮影） */}
       {!selectMode && (
-        <Link
-          href="/products/new"
-          aria-label="新しい商品を追加"
-          className="group fixed bottom-6 right-6 flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
-        >
-          <BorderBeam />
-          <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
-        </Link>
+        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+          <Link
+            href="/worth-it"
+            aria-label="仕入れ前査定"
+            title="仕入れ前査定（出品せずに相場をチェック）"
+            className="group relative flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xl shadow-emerald-600/30 transition-transform duration-200 hover:scale-105 active:scale-95"
+          >
+            <Sparkles className="size-4" />
+            仕入れ前査定
+          </Link>
+          <Link
+            href="/products/new"
+            aria-label="新しい商品を追加"
+            className="group relative flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
+          >
+            <BorderBeam />
+            <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
+          </Link>
+        </div>
       )}
 
       {/* 選択モード: 下部ツールバー */}
