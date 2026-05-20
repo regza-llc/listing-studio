@@ -1,17 +1,15 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  AUCTOWN_CSV_HEADER,
-  AUCTOWN_DEFAULTS,
-  AUCTOWN_IMAGE_SLOTS,
-  buildAuctownImageFilename,
-  buildAuctownRow,
-  rowToAuctownCsv,
-} from "@/lib/auctown";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const CARRIER_LABEL: Record<string, string> = {
+  japan_post: "日本郵便",
+  yamato: "ヤマト運輸",
+  sagawa: "佐川急便",
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,11 +28,9 @@ export async function POST(req: NextRequest) {
     const { data: products, error: productsErr } = await supabase
       .from("products")
       .select(
-        `id, created_at, status, title, category_hint,
-         yahoo_category_path, yahoo_category_id,
-         description, condition, storage_location, start_price,
-         suggested_price_min, suggested_price_max, shipping_hint, notes,
-         dimensions, flaws,
+        `id, created_at, status, title, category_hint, condition,
+         storage_location, start_price, notes, shipping_method_id,
+         shipping_method:shipping_methods ( carrier, name, size ),
          product_photos ( storage_path, order_index )`,
       )
       .in("id", productIds);
@@ -51,102 +47,103 @@ export async function POST(req: NextRequest) {
     }
 
     const zip = new JSZip();
-    const csvLines: string[] = [rowToAuctownCsv(Array.from(AUCTOWN_CSV_HEADER))];
-
-    // 警告メッセージ蓄積（カテゴリID未取得など）
     const warnings: string[] = [];
 
     for (const p of products) {
       const photos = (p.product_photos ?? [])
         .slice()
         .sort((a, b) => a.order_index - b.order_index)
-        .slice(0, AUCTOWN_IMAGE_SLOTS); // 10枚まで
+        .slice(0, 10);
 
-      // 画像をフラットに ZIP へ追加 + ファイル名配列を作る
-      const imageFilenames: string[] = [];
+      const productFolder = `product-${p.id}`;
+      const photoFilenames: string[] = [];
+
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         const ext = photo.storage_path.split(".").pop() ?? "jpg";
-        const filename = buildAuctownImageFilename(p.id, i, ext);
+        const filename = `${String(i + 1).padStart(2, "0")}.${ext}`;
 
         const { data: blob, error: dlErr } = await supabase.storage
           .from("product-photos")
           .download(photo.storage_path);
 
         if (dlErr || !blob) {
-          console.error(`[export] download失敗: ${photo.storage_path}`, dlErr);
           warnings.push(`商品 ${p.id} の画像 ${i + 1} がダウンロード失敗`);
           continue;
         }
 
         const buffer = Buffer.from(await blob.arrayBuffer());
-        zip.file(filename, buffer);
-        imageFilenames.push(filename);
+        zip.file(`${productFolder}/${filename}`, buffer);
+        photoFilenames.push(filename);
       }
 
-      const row = buildAuctownRow(p, imageFilenames);
-      for (const w of row.warnings) {
-        warnings.push(`商品 ${w.product_id}: ${w.message}`);
-      }
-      csvLines.push(rowToAuctownCsv(row.cells));
+      const sm = (p as { shipping_method?: { carrier?: string; name?: string; size?: string | null } })
+        .shipping_method;
+      const shippingLabel = sm
+        ? sm.size
+          ? `${CARRIER_LABEL[sm.carrier ?? ""] ?? sm.carrier} / ${sm.name}（${sm.size}）`
+          : `${CARRIER_LABEL[sm.carrier ?? ""] ?? sm.carrier} / ${sm.name}`
+        : null;
+
+      const metadata = {
+        product_id: p.id,
+        created_at: p.created_at,
+        status: p.status,
+        title: p.title,
+        category_hint: p.category_hint,
+        condition: p.condition,
+        storage_location: p.storage_location,
+        start_price: p.start_price,
+        shipping_method: shippingLabel,
+        notes: p.notes,
+        photos: photoFilenames,
+      };
+
+      zip.file(
+        `${productFolder}/metadata.json`,
+        JSON.stringify(metadata, null, 2),
+      );
     }
 
-    // UTF-8 BOM + CRLF（Excel/オークタウン両方で読める）
-    const csvBody = csvLines.join("\r\n");
-    const csvWithBom = "﻿" + csvBody;
-    zip.file("auctown_listing.csv", csvWithBom);
-
-    // README
-    const readme = `# listing-studio オークタウン出品 ZIP
+    const readme = `# listing-studio v0.2 エクスポート ZIP
 
 エクスポート日時: ${new Date().toISOString()}
 対象商品数: ${products.length}
 
 ## ファイル構成
 
-- auctown_listing.csv : オークタウン公式テンプレ準拠の出品 CSV（UTF-8 BOM・26 列）
-- *.jpg : 出品用画像（CSV の「画像1〜10」列で参照）
+各商品ごとに以下のフォルダが生成されます:
 
-## オークタウン取込手順
+  product-{商品ID}/
+    ├── 01.jpg, 02.jpg, ... (撮影写真・最大 10 枚)
+    └── metadata.json       (商品メタデータ)
 
-1. ZIP を解凍する（フォルダ階層なしのフラット展開）
-2. オークタウン管理画面 → 一括出品 → CSV インポート
-3. auctown_listing.csv をアップロード
-4. 画像を一括アップロード（ZIP 解凍後のすべての .jpg を選択）
-5. プレビュー確認 → 問題なければ出品実行
+## metadata.json のスキーマ
 
-## 固定値（settings）
+- product_id        : 商品 ID
+- created_at        : 作成日時 (ISO 8601)
+- status            : ステータス (draft / ready / exported)
+- title             : 商品タイトル (任意・空欄の場合は Claude 側で生成)
+- category_hint     : カテゴリヒント
+- condition         : 商品の状態 (新品同様 / 美品 / 良品 / 可 / 難あり)
+- storage_location  : しまう場所
+- start_price       : 開始価格（円・任意）
+- shipping_method   : 配送方法 (キャリア / 商品名 / サイズ)
+- notes             : 備考
+- photos            : 写真ファイル名の配列
 
-以下はすべての商品に共通で入る値（環境変数で上書き可能）:
+## Claude による仕訳・出品データ生成
 
-| 列 | 値 | 環境変数 |
-|---|---|---|
-| 個数 | ${AUCTOWN_DEFAULTS.quantity} | AUCTOWN_QUANTITY |
-| 開催期間（日）| ${AUCTOWN_DEFAULTS.duration_days} | AUCTOWN_DURATION_DAYS |
-| 終了時間（時）| ${AUCTOWN_DEFAULTS.end_time_hour} | AUCTOWN_END_TIME |
-| 返品の可否 | ${AUCTOWN_DEFAULTS.returns} | AUCTOWN_RETURNS |
-| 発送元都道府県 | ${AUCTOWN_DEFAULTS.seller_prefecture} | AUCTOWN_SELLER_PREFECTURE |
-| 送料負担 | ${AUCTOWN_DEFAULTS.shipping_payer} | AUCTOWN_SHIPPING_PAYER |
-| 代金支払い | ${AUCTOWN_DEFAULTS.payment_method} | AUCTOWN_PAYMENT_METHOD |
-| yahoo!簡単決済 | ${AUCTOWN_DEFAULTS.yahoo_kantan} | AUCTOWN_YAHOO_KANTAN |
-| 発送までの日数 | ${AUCTOWN_DEFAULTS.shipping_days} | AUCTOWN_SHIPPING_DAYS |
-| 自動延長 | ${AUCTOWN_DEFAULTS.auto_extension} | AUCTOWN_AUTO_EXTENSION |
-| 早期終了 | ${AUCTOWN_DEFAULTS.early_close} | AUCTOWN_EARLY_CLOSE |
+この ZIP をそのまま Claude（外部 AI）に投入することで:
+- 商品タイトルの生成
+- ヤフオク / オークタウン用カテゴリ ID の判定
+- 開始価格の推定
+- オークタウン CSV の生成
 
-## 状態ランクのマッピング
-
-listing-studio 内部の A/B/C/D は以下の通り公式区分にマッピングされます:
-
-- A → 目立った傷や汚れなし
-- B → やや傷や汚れあり
-- C → 傷や汚れあり
-- D → 全体的に状態が悪い
-
-(古物商前提のため「未使用」「未使用に近い」は使用しません)
-
+までを Claude 側で実行できます。
 ${
   warnings.length > 0
-    ? `## ⚠ 警告\n\n${warnings.map((w) => `- ${w}`).join("\n")}\n\n→ カテゴリ ID が空欄の行は、オークタウン側で取込前に手動で補完してください。\n`
+    ? `\n## ⚠ 警告\n\n${warnings.map((w) => `- ${w}`).join("\n")}\n`
     : ""
 }
 `;
@@ -154,7 +151,6 @@ ${
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 
-    // exported ステータスへ更新（ベストエフォート）
     await supabase
       .from("products")
       .update({ status: "exported" })
@@ -166,7 +162,7 @@ ${
       status: 200,
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="auctown_${today}.zip"`,
+        "Content-Disposition": `attachment; filename="listing-studio_${today}.zip"`,
         "Content-Length": zipBuffer.length.toString(),
       },
     });

@@ -1,15 +1,13 @@
 "use client";
 
-import { ImageOff, Images, Sparkles } from "lucide-react";
+import { ImageOff, Images } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getPhotoSignedUrl } from "@/lib/products";
 import type { ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
-
-const ANALYZE_EXPECTED_SECONDS = 15; // Smart 分析の想定上限
 
 const STATUS_LABEL: Record<
   string,
@@ -18,23 +16,22 @@ const STATUS_LABEL: Record<
   draft: {
     label: "下書き",
     variant: "neutral",
-    tooltip: "撮影直後 / AI 推定中。タップして確認・編集できます。",
+    tooltip: "撮影済。タップしてメタ入力できます。",
   },
-  // 旧 reviewing は ready と同等に表示（互換性）
   reviewing: {
     label: "完成",
     variant: "success",
-    tooltip: "AI 推定完了。CSV エクスポートに進めます。",
+    tooltip: "メタ入力完了。ZIP エクスポートに進めます。",
   },
   ready: {
     label: "完成",
     variant: "success",
-    tooltip: "出品準備OK。CSV エクスポート対象です。",
+    tooltip: "出品準備OK。ZIP エクスポート対象です。",
   },
   exported: {
     label: "出力済",
     variant: "secondary",
-    tooltip: "CSV 書き出し済み。オークタウン取込みに使ってください。",
+    tooltip: "ZIP 書き出し済み。Claude へ投入してください。",
   },
 };
 
@@ -89,32 +86,6 @@ export function ProductCard({
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
   const isReady =
     product.status === "ready" || product.status === "reviewing";
-  const isAnalyzing = product.status === "draft";
-
-  // 分析中の経過秒数
-  const [elapsedSec, setElapsedSec] = useState(0);
-  useEffect(() => {
-    if (!isAnalyzing) return;
-    const start = new Date(product.created_at).getTime();
-    const tick = () => setElapsedSec(Math.floor((Date.now() - start) / 1000));
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [isAnalyzing, product.created_at]);
-
-  const progressPercent = Math.min(
-    100,
-    Math.round((elapsedSec / ANALYZE_EXPECTED_SECONDS) * 100),
-  );
-  const spotlightRef = useRef<HTMLDivElement>(null);
-
-  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    const el = spotlightRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
-    el.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
-  }
 
   const innerClassName = cn(
     "block rounded-2xl bg-card transition-all duration-300",
@@ -127,10 +98,8 @@ export function ProductCard({
 
   const inner = (
     <div
-      ref={spotlightRef}
-      onMouseMove={handleMouseMove}
       className={cn(
-        "spotlight-card group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/70",
+        "group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/70",
         isReady && "gradient-border-emerald",
       )}
     >
@@ -158,27 +127,6 @@ export function ProductCard({
             {statusInfo.label}
           </Badge>
         </div>
-
-        {/* AI 分析中オーバーレイ */}
-        {isAnalyzing && (
-          <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-black/70 via-black/40 to-transparent p-2 pt-6">
-            <div className="flex items-center gap-1.5 text-white">
-              <Sparkles className="size-3 animate-pulse text-sky-300" />
-              <span className="text-[10px] font-semibold tabular-nums">
-                AI 分析中 {elapsedSec}s
-              </span>
-              <span className="text-[10px] text-white/70">
-                / 約{ANALYZE_EXPECTED_SECONDS}s
-              </span>
-            </div>
-            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full bg-gradient-to-r from-sky-400 to-violet-400 transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        )}
 
         {photoCount > 1 && (
           <div className="absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">

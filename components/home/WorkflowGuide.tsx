@@ -5,7 +5,7 @@ import {
   Camera,
   CheckCircle2,
   Download,
-  Sparkles,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
@@ -27,22 +27,22 @@ const STEPS = [
     description: "スマホで連続撮影",
   },
   {
-    key: "ai",
-    label: "AI 判別",
-    icon: Sparkles,
-    description: "商品名・状態を自動推定",
+    key: "input",
+    label: "メタ入力",
+    icon: Pencil,
+    description: "状態・配送・しまう場所",
   },
   {
     key: "check",
-    label: "確認",
+    label: "完成",
     icon: CheckCircle2,
-    description: "そのままOK or 編集",
+    description: "完成にして出力対象に",
   },
   {
     key: "export",
     label: "出力",
     icon: Download,
-    description: "CSV + 写真をダウンロード",
+    description: "ZIP（写真+メタ）",
   },
 ] as const;
 
@@ -196,9 +196,9 @@ function nextAction(
   if (counts.draft > 0) {
     return {
       tone: "primary",
-      Icon: Sparkles,
+      Icon: Pencil,
       title: `下書きが ${counts.draft} 件あります`,
-      description: "AI 推定の確認 or 編集 → 完成にしてエクスポートに進みます",
+      description: "状態・配送方法を入力 → 完成にしてエクスポートに進みます",
       cta: { label: "下書きを見る", onClick: handlers.onShowDrafts },
     };
   }

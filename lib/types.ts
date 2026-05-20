@@ -1,29 +1,15 @@
 export type ProductStatus = "draft" | "reviewing" | "ready" | "exported";
 
-export type PriceResearchSource = {
-  url: string;
-  title: string;
-};
+export type Carrier = "japan_post" | "yamato" | "sagawa";
 
-export type SoldComp = {
-  title: string;
-  price: number;
-  url?: string;
-  sold_at?: string;
-  marketplace?: "yahoo" | "mercari" | "rakuma" | "other";
-  condition?: string;
-};
-
-export type ProductFlaw = {
-  location: string;
-  severity: "minor" | "moderate" | "major";
-  description: string;
-};
-
-export type Dimension = {
-  label: string; // "身幅" "着丈" "袖丈" "横" "縦" "高さ" "口径" など
-  value: number;
-  unit: "cm" | "mm" | "inch" | "g" | "kg";
+export type ShippingMethod = {
+  id: string;
+  carrier: Carrier;
+  name: string;
+  size: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
 };
 
 export type Product = {
@@ -36,25 +22,12 @@ export type Product = {
   condition: string | null;
   storage_location: string | null;
   start_price: number | null;
-  ai_analysis: Record<string, unknown> | null;
+  shipping_method_id: string | null;
   notes: string | null;
-  suggested_price_min: number | null;
-  suggested_price_max: number | null;
-  price_research_summary: string | null;
-  price_research_sources: PriceResearchSource[] | null;
-  price_researched_at: string | null;
-  // Smart 分析で追加されたフィールド
-  description: string | null;
-  yahoo_category_path: string | null;
-  yahoo_category_id: string | null;
-  shipping_hint: string | null;
-  // 落札事例（V2 リサーチ）
-  sold_comps: SoldComp[] | null;
-  price_confidence: number | null;
-  // 傷・難ありの自動箇条書き
-  flaws: ProductFlaw[] | null;
-  // 採寸データ
-  dimensions: Dimension[] | null;
+};
+
+export type ProductWithShipping = Product & {
+  shipping_method?: ShippingMethod | null;
 };
 
 export type ProductPhoto = {

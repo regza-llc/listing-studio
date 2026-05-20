@@ -10,22 +10,18 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CsvPreviewModal } from "@/components/export/CsvPreviewModal";
 import { KanbanView } from "@/components/home/KanbanView";
 import { WorkflowGuide } from "@/components/home/WorkflowGuide";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
 import { NumberTicker } from "@/components/ui/number-ticker";
-import { ShinyText } from "@/components/ui/shiny-text";
 import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
@@ -58,7 +54,6 @@ export default function Home() {
   const [reverting, setReverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -279,13 +274,7 @@ export default function Home() {
     }
   }
 
-  function handleExportClick() {
-    if (selectedIds.size === 0 || exporting) return;
-    setExportError(null);
-    setPreviewOpen(true);
-  }
-
-  async function confirmExport() {
+  async function handleExportClick() {
     if (selectedIds.size === 0 || exporting) return;
     setExporting(true);
     setExportError(null);
@@ -304,12 +293,11 @@ export default function Home() {
       const a = document.createElement("a");
       const today = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `auctown_${today}.zip`;
+      a.download = `listing-studio_${today}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setPreviewOpen(false);
       exitSelectMode();
       fetchList(true);
     } catch (e) {
@@ -516,8 +504,7 @@ export default function Home() {
               </span>
               {draftCount > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200">
-                  <Loader2 className="size-3 animate-spin" />
-                  <ShinyText>AI 推定中 {draftCount}</ShinyText>
+                  入力待ち {draftCount}
                 </span>
               )}
             </div>
@@ -606,40 +593,18 @@ export default function Home() {
           </div>
         ))}
 
-      {/* 通常モード: FAB 2つ + 使い分けガイド付き */}
+      {/* 通常モード: 撮影 FAB */}
       {!selectMode && (
-        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
-          {/* 仕入れ前査定（買取判断用） */}
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 shadow-md ring-1 ring-emerald-200 backdrop-blur-sm">
-              買取判断のとき
-            </span>
-            <Link
-              href="/worth-it"
-              aria-label="仕入れ前査定"
-              title="仕入れ前査定: 出品せずに相場と粗利を15秒チェック（買取判断・店頭で使う）"
-              className="group relative flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xl shadow-emerald-600/30 transition-transform duration-200 hover:scale-105 active:scale-95"
-            >
-              <Sparkles className="size-4" />
-              仕入れ前査定
-            </Link>
-          </div>
-
-          {/* 通常の出品（在庫出品用） */}
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-zinc-700 shadow-md ring-1 ring-zinc-200 backdrop-blur-sm">
-              出品準備のとき
-            </span>
-            <Link
-              href="/products/new"
-              aria-label="新しい商品を追加"
-              title="通常の出品: 在庫を5アングル撮影してCSV取込み用データを作る（おきちゃん用）"
-              className="group relative flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
-            >
-              <BorderBeam />
-              <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
-            </Link>
-          </div>
+        <div className="fixed bottom-6 right-6 z-30">
+          <Link
+            href="/products/new"
+            aria-label="新しい商品を追加"
+            title="新しい商品を撮影する"
+            className="group relative flex size-16 items-center justify-center rounded-full bg-zinc-900 text-white shadow-2xl shadow-zinc-900/40 transition-transform duration-200 hover:scale-105 active:scale-95"
+          >
+            <BorderBeam />
+            <Plus className="relative size-7 transition-transform group-hover:rotate-90" />
+          </Link>
         </div>
       )}
 
@@ -742,7 +707,7 @@ export default function Home() {
                   ) : (
                     <Download className="size-4" />
                   )}
-                  {exporting ? "出力中..." : "プレビュー → エクスポート"}
+                  {exporting ? "出力中..." : "ZIP エクスポート"}
                 </Button>
               </div>
             </div>
@@ -770,15 +735,6 @@ export default function Home() {
         </div>
       )}
 
-      <CsvPreviewModal
-        open={previewOpen}
-        productIds={previewOpen ? Array.from(selectedIds) : []}
-        onClose={() => {
-          if (!exporting) setPreviewOpen(false);
-        }}
-        onConfirm={confirmExport}
-        confirming={exporting}
-      />
     </main>
   );
 }

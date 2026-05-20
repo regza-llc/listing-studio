@@ -1,6 +1,6 @@
 {
   "name": "listing-studio",
-  "version": "0.1.0",
+  "version": "0.2.0-dev",
   "private": true,
   "description": "撮影〜AI 商品化までのワンストップ出品アプリ（v0.1 ミニマル MVP）",
   "scripts": {
@@ -12,7 +12,6 @@
     "export": "node scripts/export.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.0.0",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "class-variance-authority": "^0.7.0",

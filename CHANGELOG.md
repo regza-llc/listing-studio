@@ -1,15 +1,63 @@
 # Changelog
 
-> v0.1 ミニマル MVP の開発ログ。
 > 主要な機能追加・バグ修正の履歴を時系列で記録。
 
 ---
 
-## [Unreleased] - 5/19 以降の予定
+## [v0.2.0-dev] - 2026-05-20（方針大転換）
 
-- サンプル 10 商品で AI 精度実機検証
-- 5/20 MTG 用の Before/After 資料作成
-- 環境変数 `APP_PASSWORD` を Vercel に設定（奥髙さん共有前）
+### 背景
+
+2026-05-20 ROKA STYLE MTG（沖由美さん × 飯田）で、v0.1 実機テスト（8 商品）の結果を踏まえて以下が確定:
+
+- AI 自動分析は 8/1 件しか成功せず、運用に耐えない（Issue #11）
+- 沖さんから「listing-studio は撮影と入力だけに専念し、AI 判別・CSV 生成は外部の Claude に任せた方が早い」と提案
+- 飯田同意 → Option A（AI 全削除）で確定（Issue #10）
+- 目標: 月 140 品 → 月 500 品 / 1 商品あたり時間 1/4 短縮
+
+### Removed（撤去）
+
+- `app/api/analyze/` — Gemini 自動分析エンドポイント
+- `app/api/research-price/` — Gemini 相場リサーチエンドポイント
+- `app/api/export/preview/` — オークタウン CSV プレビュー
+- `app/worth-it/` — 仕入れ前査定機能（Phase 6）
+- `lib/gemini.ts` — Gemini SDK ラッパ
+- `lib/auctown.ts` — オークタウン CSV 列定義
+- `components/dimension-input/` — 採寸 AI 音声入力
+- `components/export/CsvPreviewModal.tsx` — CSV プレビューモーダル
+- `components/product-detail/AuctownPreviewCard.tsx` — オークタウン出品サマリ
+- `scripts/e2e_analyze_test.mjs` — AI 分析 E2E テスト
+- `@google/genai` 依存
+- products テーブルから AI 由来カラム（`ai_analysis`, `suggested_price_*`, `price_research_*`, `description`, `yahoo_category_*`, `sold_comps`, `price_confidence`, `flaws`, `dimensions`, `shipping_hint`）
+
+### Added（追加）
+
+- **shipping_methods マスタテーブル**（Issue #15）
+  - 30 項目シード（日本郵便 10 / ヤマト 9 / 佐川 11）
+  - `id, carrier, name, size, sort_order, is_active`
+- **`components/ui/shipping-method-select.tsx`** — キャリア別グループ + テキスト検索プルダウン
+- **products.shipping_method_id** カラム（FK）
+- **`metadata.json` 出力**（ZIP エクスポート内に商品ごとに添付）
+- 商品の状態を 5 段階ラジオ（新品同様 / 美品 / 良品 / 可 / 難あり）に簡素化
+- supabase migration: `20260520000000_v02_ai_removal_shipping_methods.sql`
+
+### Changed（変更）
+
+- 商品詳細画面を 1200 行 → ~280 行に簡素化（AI 関連 UI 全廃）
+- WorkflowGuide の 4 ステップを「撮影 → メタ入力 → 完成 → 出力」に変更
+- 一覧 FAB を 2 つ（撮影 / 仕入れ前査定）から撮影のみに変更
+- ZIP ダウンロードファイル名: `auctown_YYYY-MM-DD.zip` → `listing-studio_YYYY-MM-DD.zip`
+- README + CHANGELOG 全面書き直し
+
+### Migration Required
+
+⚠ 本リリースは **破壊的スキーマ変更** を含みます。本番デプロイ前に migration を実行してください:
+
+```
+supabase/migrations/20260520000000_v02_ai_removal_shipping_methods.sql
+```
+
+このマイグレーションは AI 由来カラムを drop します（データは復元不可）。
 
 ---
 
