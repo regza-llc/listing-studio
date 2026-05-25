@@ -87,15 +87,6 @@ export default function Home() {
     fetchList();
   }, [fetchList]);
 
-  useEffect(() => {
-    if (!products) return;
-    const hasDraft = products.some((p) => p.status === "draft");
-    if (!hasDraft) return;
-
-    const interval = setInterval(() => fetchList(), 3000);
-    return () => clearInterval(interval);
-  }, [products, fetchList]);
-
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       all: products?.length ?? 0,
