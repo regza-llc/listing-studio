@@ -4,7 +4,6 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
-  ImageOff,
   Loader2,
   Save,
   Trash2,
@@ -17,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { PhotoManager } from "@/components/product-detail/PhotoManager";
 import { ShippingMethodSelect } from "@/components/ui/shipping-method-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -188,34 +188,12 @@ export default function ProductDetailPage() {
         </Card>
       )}
 
-      <Card className="p-3">
-        <p className="mb-2 text-xs text-zinc-500">
-          写真 {product.product_photos.length} 枚
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {product.product_photos.map((photo) => {
-            const url = photoUrls[photo.id];
-            return (
-              <div
-                key={photo.id}
-                className="aspect-square overflow-hidden rounded-md bg-zinc-100"
-              >
-                {url ? (
-                  <img
-                    src={url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <ImageOff className="h-6 w-6 text-zinc-300" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+      <PhotoManager
+        productId={id}
+        photos={product.product_photos}
+        photoUrls={photoUrls}
+        onChanged={load}
+      />
 
       <Card className="space-y-4 p-4">
         <div>

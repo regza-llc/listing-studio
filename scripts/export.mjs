@@ -25,12 +25,40 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 import { mkdir, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// 1 枚目フレーム合成（/api/export・lib/frame-overlay.ts と同一仕様）
+const FRAME_BORDER_RATIO = 0.04;
+const FRAME_BORDER_MIN_PX = 12;
+
+function frameColor(key) {
+  if (key === "border-black") return "#000000";
+  if (key === "border-white") return "#ffffff";
+  return null;
+}
+
+async function applyFrame(buffer, key) {
+  const color = frameColor(key);
+  if (!color) return { buffer, ext: null };
+  const img = sharp(buffer, { failOn: "none" });
+  const meta = await img.metadata();
+  const longEdge = Math.max(meta.width ?? 1024, meta.height ?? 1024);
+  const border = Math.max(
+    FRAME_BORDER_MIN_PX,
+    Math.round(longEdge * FRAME_BORDER_RATIO),
+  );
+  const out = await img
+    .extend({ top: border, bottom: border, left: border, right: border, background: color })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+  return { buffer: out, ext: "jpg" };
+}
 
 const CARRIER_LABEL = {
   japan_post: "日本郵便",
@@ -46,6 +74,7 @@ function parseArgs(argv) {
     else if (a === "--output") args.output = argv[++i];
     else if (a === "--since") args.since = argv[++i];
     else if (a === "--ids") args.ids = argv[++i].split(",").map((s) => s.trim());
+    else if (a === "--frame") args.frame = argv[++i];
     else if (a === "--help" || a === "-h") args.help = true;
   }
   return args;
@@ -91,6 +120,7 @@ async function main() {
   --output <path>                      出力先 (既定: C:\\Yahoo\\exports\\YYYY-MM-DD)
   --since <YYYY-MM-DD>                 この日付以降に作成された商品のみ
   --ids <id1,id2,...>                  特定の商品IDのみ
+  --frame <none|border-black|border-white>  1枚目に枠線を合成 (既定: none)
   --help                               このヘルプ`);
     process.exit(0);
   }
@@ -158,8 +188,6 @@ async function main() {
 
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
-      const ext = photo.storage_path.split(".").pop() ?? "jpg";
-      const filename = `${String(i + 1).padStart(2, "0")}.${ext}`;
 
       const { data: blob, error: dlErr } = await supabase.storage
         .from("product-photos")
@@ -171,7 +199,23 @@ async function main() {
         continue;
       }
 
-      const buffer = Buffer.from(await blob.arrayBuffer());
+      let buffer = Buffer.from(await blob.arrayBuffer());
+      let ext = photo.storage_path.split(".").pop() ?? "jpg";
+
+      // 1 枚目（サムネ）にだけ枠線フレームを合成（非破壊・元 Storage は無加工）
+      if (i === 0 && args.frame && args.frame !== "none") {
+        try {
+          const framed = await applyFrame(buffer, args.frame);
+          if (framed.ext) {
+            buffer = framed.buffer;
+            ext = framed.ext;
+          }
+        } catch (e) {
+          console.warn(`  ⚠ フレーム合成失敗（元画像で出力）: ${e.message}`);
+        }
+      }
+
+      const filename = `${String(i + 1).padStart(2, "0")}.${ext}`;
       await writeFile(join(productDir, filename), buffer);
       photoFilenames.push(filename);
       totalPhotos++;

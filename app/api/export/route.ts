@@ -1,5 +1,7 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
+import { applyFrame } from "@/lib/frame-overlay";
+import { isFrameKey } from "@/lib/frame-templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -15,6 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const productIds = body?.product_ids as string[] | undefined;
+    const frame = isFrameKey(body?.frame) ? body.frame : "none";
 
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return NextResponse.json(
@@ -60,8 +63,6 @@ export async function POST(req: NextRequest) {
 
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
-        const ext = photo.storage_path.split(".").pop() ?? "jpg";
-        const filename = `${String(i + 1).padStart(2, "0")}.${ext}`;
 
         const { data: blob, error: dlErr } = await supabase.storage
           .from("product-photos")
@@ -72,7 +73,23 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const buffer = Buffer.from(await blob.arrayBuffer());
+        let buffer: Buffer = Buffer.from(await blob.arrayBuffer());
+        let ext = photo.storage_path.split(".").pop() ?? "jpg";
+
+        // 1 枚目（サムネ）にだけ枠線フレームを合成（Option B・非破壊）
+        if (i === 0 && frame !== "none") {
+          try {
+            buffer = await applyFrame(buffer, frame);
+            ext = "jpg"; // applyFrame は常に JPEG を返す
+          } catch (e) {
+            warnings.push(
+              `商品 ${p.id} の 1 枚目フレーム合成に失敗（元画像で出力）`,
+            );
+            console.error("[export] applyFrame failed:", e);
+          }
+        }
+
+        const filename = `${String(i + 1).padStart(2, "0")}.${ext}`;
         zip.file(`${productFolder}/${filename}`, buffer);
         photoFilenames.push(filename);
       }
