@@ -153,6 +153,109 @@ export async function updateProduct(
   return { ok: true };
 }
 
+/** オークタウン出品スロット上限（旧 lib/auctown.ts:AUCTOWN_IMAGE_SLOTS） */
+export const MAX_PHOTOS = 10;
+
+/**
+ * 既存商品に写真を追加する。order_index は現在の枚数の続きから連番。
+ * 上限 MAX_PHOTOS を超える分は切り捨て、追加できた枚数を返す。
+ * ファイル名は UUID にして、削除/並び替え後の index 再利用による衝突を防ぐ。
+ */
+export async function addPhotosToProduct(
+  productId: string,
+  blobs: Blob[],
+  existingCount: number,
+): Promise<{ added: number; skipped: number } | { error: string }> {
+  const room = MAX_PHOTOS - existingCount;
+  if (room <= 0) {
+    return { error: `写真は最大 ${MAX_PHOTOS} 枚までです` };
+  }
+
+  const supabase = createClient();
+  const toAdd = blobs.slice(0, room);
+  let added = 0;
+
+  for (let i = 0; i < toAdd.length; i++) {
+    const orderIndex = existingCount + i;
+    const path = `${productId}/${crypto.randomUUID()}.jpg`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from("product-photos")
+      .upload(path, toAdd[i], { contentType: "image/jpeg", upsert: false });
+    if (uploadErr) {
+      return { error: `アップロード失敗: ${uploadErr.message}` };
+    }
+
+    const { error: insertErr } = await supabase
+      .from("product_photos")
+      .insert({ product_id: productId, order_index: orderIndex, storage_path: path });
+    if (insertErr) {
+      // アップロード済み Blob を後始末
+      await supabase.storage.from("product-photos").remove([path]);
+      return { error: `レコード作成失敗: ${insertErr.message}` };
+    }
+    added++;
+  }
+
+  return { added, skipped: blobs.length - added };
+}
+
+/**
+ * 写真を 1 枚削除し、残りの order_index を 0 から詰め直す。
+ */
+export async function deletePhoto(
+  productId: string,
+  photo: { id: string; storage_path: string },
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = createClient();
+
+  await supabase.storage.from("product-photos").remove([photo.storage_path]);
+
+  const { error: delErr } = await supabase
+    .from("product_photos")
+    .delete()
+    .eq("id", photo.id);
+  if (delErr) return { error: delErr.message };
+
+  const { data: remaining, error: listErr } = await supabase
+    .from("product_photos")
+    .select("id, order_index")
+    .eq("product_id", productId)
+    .order("order_index");
+  if (listErr) return { error: listErr.message };
+
+  for (let i = 0; i < (remaining?.length ?? 0); i++) {
+    const row = remaining![i];
+    if (row.order_index !== i) {
+      const { error } = await supabase
+        .from("product_photos")
+        .update({ order_index: i })
+        .eq("id", row.id);
+      if (error) return { error: error.message };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * 写真の並び順を更新する。orderedPhotoIds の並び順がそのまま order_index になる。
+ * order_index に一意制約はないため逐次更新で衝突しない。
+ */
+export async function reorderPhotos(
+  orderedPhotoIds: string[],
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = createClient();
+  for (let i = 0; i < orderedPhotoIds.length; i++) {
+    const { error } = await supabase
+      .from("product_photos")
+      .update({ order_index: i })
+      .eq("id", orderedPhotoIds[i]);
+    if (error) return { error: error.message };
+  }
+  return { ok: true };
+}
+
 export async function listShippingMethods(): Promise<
   { methods: ShippingMethod[] } | { error: string }
 > {
