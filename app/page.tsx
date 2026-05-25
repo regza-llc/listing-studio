@@ -22,6 +22,7 @@ import { WorkflowGuide } from "@/components/home/WorkflowGuide";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
 import { NumberTicker } from "@/components/ui/number-ticker";
+import { useCameraSettings } from "@/lib/camera-settings";
 import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ function topCategory(hint: string | null | undefined): string | null {
 }
 
 export default function Home() {
+  const { settings: cameraSettings } = useCameraSettings();
   const [products, setProducts] = useState<ProductListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,7 +275,10 @@ export default function Home() {
       const res = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_ids: Array.from(selectedIds) }),
+        body: JSON.stringify({
+          product_ids: Array.from(selectedIds),
+          frame: cameraSettings.frame,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

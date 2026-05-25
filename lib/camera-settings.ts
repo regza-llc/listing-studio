@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { type FrameKey, isFrameKey } from "@/lib/frame-templates";
 
 /**
  * カメラ撮影の設定。撮影画面の歯車モーダルから調整し localStorage に永続化する。
@@ -20,6 +21,8 @@ export type CameraSettings = {
   facingMode: "environment" | "user";
   /** Web カメラ（getUserMedia）を優先するか。false なら OS カメラ取り込み。 */
   preferWebCamera: boolean;
+  /** 1 枚目（サムネ）に合成する枠線フレーム（エクスポート時に適用） */
+  frame: FrameKey;
 };
 
 export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
@@ -28,6 +31,7 @@ export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   aspectRatio: "1:1",
   facingMode: "environment",
   preferWebCamera: true,
+  frame: "none",
 };
 
 export const LONG_EDGE_OPTIONS: { value: LongEdge; label: string }[] = [
@@ -91,7 +95,8 @@ function sanitize(raw: unknown): CameraSettings {
     typeof r.preferWebCamera === "boolean"
       ? r.preferWebCamera
       : DEFAULT_CAMERA_SETTINGS.preferWebCamera;
-  return { longEdge, quality, aspectRatio, facingMode, preferWebCamera };
+  const frame = isFrameKey(r.frame) ? r.frame : DEFAULT_CAMERA_SETTINGS.frame;
+  return { longEdge, quality, aspectRatio, facingMode, preferWebCamera, frame };
 }
 
 function loadSettings(): CameraSettings {

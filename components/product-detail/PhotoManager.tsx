@@ -16,6 +16,8 @@ import { useRef, useState } from "react";
 import { CameraCapture, type CapturedPhoto } from "@/components/camera/CameraCapture";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useCameraSettings } from "@/lib/camera-settings";
+import { frameBorderColor } from "@/lib/frame-templates";
 import { resizeImage } from "@/lib/image-resize";
 import {
   addPhotosToProduct,
@@ -39,6 +41,8 @@ export function PhotoManager({
   photoUrls: Record<string, string>;
   onChanged: () => Promise<void> | void;
 }) {
+  const { settings } = useCameraSettings();
+  const frameColor = frameBorderColor(settings.frame);
   const sorted = [...photos].sort((a, b) => a.order_index - b.order_index);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,11 +260,17 @@ export function PhotoManager({
                   </div>
                 )}
 
-                {/* 1 枚目（サムネ）バッジ */}
+                {/* 1 枚目（サムネ）バッジ + フレームプレビュー */}
                 {idx === 0 && (
-                  <span className="absolute left-1 top-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-950 shadow">
+                  <span className="absolute left-1 top-1 z-10 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-950 shadow">
                     🥇 1枚目
                   </span>
+                )}
+                {idx === 0 && frameColor && (
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ border: `6px solid ${frameColor}` }}
+                  />
                 )}
 
                 {reorderMode ? (

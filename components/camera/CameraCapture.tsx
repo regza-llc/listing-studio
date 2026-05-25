@@ -25,6 +25,7 @@ import {
   LONG_EDGE_OPTIONS,
   useCameraSettings,
 } from "@/lib/camera-settings";
+import { FRAME_OPTIONS } from "@/lib/frame-templates";
 import { cn } from "@/lib/utils";
 
 export type CapturedPhoto = {
@@ -951,6 +952,24 @@ function CameraSettingsModal({
                 </SegButton>
               ))}
             </div>
+          </SettingGroup>
+
+          {/* サムネフレーム（1 枚目に合成・エクスポート時適用） */}
+          <SettingGroup label="サムネフレーム（1枚目）">
+            <div className="grid grid-cols-3 gap-2">
+              {FRAME_OPTIONS.map((o) => (
+                <SegButton
+                  key={o.value}
+                  active={settings.frame === o.value}
+                  onClick={() => onChange({ frame: o.value })}
+                >
+                  {o.label}
+                </SegButton>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-zinc-400">
+              ZIP 出力時に 1 枚目へ枠線を合成します（元画像は無加工で保存）。
+            </p>
           </SettingGroup>
 
           {/* 解像度 */}
