@@ -20,7 +20,16 @@
   --color-border: oklch(0.92 0 0);
   --color-input: oklch(0.92 0 0);
   --color-ring: oklch(0.708 0 0);
+
+  /* 角丸スケール: すべて --radius (0.75rem = 12px) 基準で導出。
+     rounded-sm/md/lg/xl がトークン駆動になり、コントロール〜カードの角丸が統一される。
+     rounded-2xl(16px)・rounded-3xl(24px)・rounded-full は Tailwind 既定のまま装飾アンカーとして使用。 */
   --radius: 0.75rem;
+  --radius-sm: calc(var(--radius) - 4px); /* 8px */
+  --radius-md: calc(var(--radius) - 2px); /* 10px */
+  --radius-lg: var(--radius); /* 12px */
+  --radius-xl: calc(var(--radius) + 4px); /* 16px */
+
   --font-sans: var(--font-geist, "ui-sans-serif"), system-ui, sans-serif;
 }
 
