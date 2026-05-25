@@ -1,17 +1,23 @@
 import { createClient } from "@/lib/supabase/client";
-import type { Product, ProductPhoto } from "@/lib/types";
+import type {
+  Product,
+  ProductPhoto,
+  ProductWithShipping,
+  ShippingMethod,
+} from "@/lib/types";
 
 export type DraftPhotoInput = {
   processed: Blob;
 };
 
-export type SaveResult =
-  | { id: string }
-  | { error: string };
+export type SaveResult = { id: string } | { error: string };
+
+const PRODUCT_COLUMNS = `id, created_at, updated_at, status, title, category_hint,
+  condition, storage_location, start_price, shipping_method_id, notes`;
 
 export async function saveDraftProduct(
   photos: DraftPhotoInput[],
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
 ): Promise<SaveResult> {
   if (photos.length === 0) {
     return { error: "写真がありません" };
@@ -79,24 +85,17 @@ export async function listProducts(): Promise<
 
   const { data, error } = await supabase
     .from("products")
-    .select(
-      `id, created_at, updated_at, status, title, category_hint, condition,
-       storage_location, start_price, ai_analysis, notes,
-       product_photos ( storage_path, order_index )`
-    )
+    .select(`${PRODUCT_COLUMNS}, product_photos ( storage_path, order_index )`)
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (error) {
-    return { error: error.message };
-  }
-
+  if (error) return { error: error.message };
   return { products: (data ?? []) as ProductListItem[] };
 }
 
 export async function getPhotoSignedUrl(
   path: string,
-  expiresIn = 3600
+  expiresIn = 3600,
 ): Promise<string | null> {
   const supabase = createClient();
   const { data, error } = await supabase.storage
@@ -107,25 +106,21 @@ export async function getPhotoSignedUrl(
   return data.signedUrl;
 }
 
-export type ProductDetail = Product & {
+export type ProductDetail = ProductWithShipping & {
   product_photos: ProductPhoto[];
 };
 
 export async function getProduct(
-  id: string
+  id: string,
 ): Promise<{ product: ProductDetail } | { error: string }> {
   const supabase = createClient();
 
   const { data, error } = await supabase
     .from("products")
     .select(
-      `id, created_at, updated_at, status, title, category_hint, condition,
-       storage_location, start_price, ai_analysis, notes,
-       suggested_price_min, suggested_price_max, price_research_summary,
-       price_research_sources, price_researched_at,
-       description, yahoo_category_path, yahoo_category_id, shipping_hint,
-       sold_comps, price_confidence, flaws, dimensions,
-       product_photos ( id, product_id, order_index, storage_path, uploaded_at )`
+      `${PRODUCT_COLUMNS},
+       shipping_method:shipping_methods ( id, carrier, name, size, sort_order, is_active, created_at ),
+       product_photos ( id, product_id, order_index, storage_path, uploaded_at )`,
     )
     .eq("id", id)
     .single();
@@ -134,7 +129,7 @@ export async function getProduct(
     return { error: error?.message ?? "商品が見つかりませんでした" };
   }
 
-  return { product: data as ProductDetail };
+  return { product: data as unknown as ProductDetail };
 }
 
 export type ProductUpdatePatch = Partial<{
@@ -143,20 +138,42 @@ export type ProductUpdatePatch = Partial<{
   condition: string | null;
   storage_location: string | null;
   start_price: number | null;
+  shipping_method_id: string | null;
   notes: string | null;
-  description: string | null;
-  yahoo_category_path: string | null;
-  shipping_hint: string | null;
-  dimensions: import("@/lib/types").Dimension[] | null;
   status: Product["status"];
 }>;
 
 export async function updateProduct(
   id: string,
-  patch: ProductUpdatePatch
+  patch: ProductUpdatePatch,
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = createClient();
   const { error } = await supabase.from("products").update(patch).eq("id", id);
   if (error) return { error: error.message };
   return { ok: true };
 }
+
+export async function listShippingMethods(): Promise<
+  { methods: ShippingMethod[] } | { error: string }
+> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("shipping_methods")
+    .select("id, carrier, name, size, sort_order, is_active, created_at")
+    .eq("is_active", true)
+    .order("sort_order");
+
+  if (error) return { error: error.message };
+  return { methods: (data ?? []) as ShippingMethod[] };
+}
+
+export function formatShippingMethod(method: ShippingMethod | null | undefined): string {
+  if (!method) return "";
+  return method.size ? `${method.name}（${method.size}）` : method.name;
+}
+
+export const CARRIER_LABEL: Record<string, string> = {
+  japan_post: "日本郵便",
+  yamato: "ヤマト運輸",
+  sagawa: "佐川急便",
+};

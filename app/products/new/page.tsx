@@ -39,12 +39,6 @@ export default function NewProductPage() {
         setError(result.error);
         return null;
       }
-      // バックグラウンドで AI 推定をトリガー
-      fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: result.id }),
-      }).catch((e) => console.error("[analyze] trigger failed:", e));
       return result.id;
     } finally {
       setSaving(false);
