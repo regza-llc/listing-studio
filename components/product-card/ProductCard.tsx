@@ -140,7 +140,7 @@ export function ProductCard({
             <Checkbox
               checked={selected}
               onCheckedChange={(v) => onSelectChange?.(product.id, v)}
-              className="size-6 bg-white/90 shadow-md"
+              className="size-8 border-2 bg-white/95 shadow-md data-[state=checked]:border-primary"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
