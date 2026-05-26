@@ -53,7 +53,7 @@ const FRAME_RESERVE_PX = 280;
 const DIGITAL_ZOOM_MAX = 4;
 const DIGITAL_ZOOM_STEP = 0.1;
 
-// マルチアングル撮影ガイド（必須5アングル）
+// マルチアングル撮影ガイド（おすすめ5アングル・1枚でも「次の商品」へ進める）
 type ShootStep = {
   key: string;
   label: string;
@@ -690,7 +690,7 @@ export function CameraCapture({
               <div className="flex items-center gap-2 text-emerald-300">
                 <Check className="size-5" />
                 <p className="text-sm font-semibold">
-                  必須5アングル撮影完了！追加で何枚でも撮れます
+                  5アングル撮影完了！追加で何枚でも撮れます
                 </p>
               </div>
             )}
@@ -801,14 +801,14 @@ export function CameraCapture({
               type="button"
               onClick={handleNextProduct}
               disabled={busy}
-              className="absolute left-6 flex flex-col items-center gap-1 rounded-2xl bg-black/60 px-3 py-2 text-white backdrop-blur-sm disabled:opacity-40"
+              className="absolute left-6 flex flex-col items-center gap-1 rounded-2xl bg-sky-500 px-4 py-2.5 text-white shadow-lg shadow-sky-500/30 disabled:opacity-40"
             >
               {busy ? (
                 <Loader2 className="size-5 animate-spin" />
               ) : (
                 <ArrowRight className="size-5" />
               )}
-              <span className="text-[10px] font-semibold leading-none">次の商品</span>
+              <span className="text-[11px] font-semibold leading-none">保存して次へ</span>
             </button>
           )}
 
@@ -847,8 +847,8 @@ export function CameraCapture({
 
         {hasPhotos && (onComplete || onNextProduct) && (
           <p className="mt-3 text-center text-[10px] text-white/70">
-            <span className="font-semibold">次の商品</span>: 保存してすぐ次の撮影へ /{" "}
-            <span className="font-semibold">完了</span>: 編集画面で詳細入力
+            <span className="font-semibold text-sky-300">保存して次へ</span>: そのまま次の商品を続けて撮影 /{" "}
+            <span className="font-semibold text-emerald-300">完了</span>: 編集画面で詳細入力
           </p>
         )}
       </div>
@@ -1113,9 +1113,8 @@ function FallbackPhotoStrip({
         <div className="flex gap-2 pt-2">
           {onNextProduct && (
             <Button
-              variant="outline"
               size="lg"
-              className="flex-1"
+              className="flex-1 bg-sky-500 text-white hover:bg-sky-600"
               onClick={onNextProduct}
               disabled={busy}
             >
@@ -1124,7 +1123,7 @@ function FallbackPhotoStrip({
               ) : (
                 <ArrowRight className="size-4" />
               )}
-              次の商品
+              保存して次へ
             </Button>
           )}
           {onComplete && (

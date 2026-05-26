@@ -56,6 +56,7 @@ export default function Home() {
   const [reverting, setReverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     tone: "success" | "error";
@@ -267,8 +268,10 @@ export default function Home() {
     }
   }
 
-  async function handleExportClick() {
+  async function doExport() {
     if (selectedIds.size === 0 || exporting) return;
+    const count = selectedIds.size;
+    setShowExportConfirm(false);
     setExporting(true);
     setExportError(null);
     try {
@@ -296,6 +299,9 @@ export default function Home() {
       URL.revokeObjectURL(url);
       exitSelectMode();
       fetchList(true);
+      showToast(
+        `✓ ${count}件のZIPをダウンロードしました。ダウンロードフォルダをご確認ください`,
+      );
     } catch (e) {
       setExportError(e instanceof Error ? e.message : "エクスポート失敗");
     } finally {
@@ -627,17 +633,19 @@ export default function Home() {
                 <div className="flex-1 text-sm">
                   <span className="font-semibold">{selectedIds.size}</span>
                   <span className="text-muted-foreground"> 件選択中</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={toggleSelectAll}
-                    className="ml-3 text-xs text-primary underline-offset-2 hover:underline"
+                    className="ml-3 h-8"
                     disabled={exporting || marking || deleting}
                   >
                     {filteredProducts &&
                     selectedIds.size === filteredProducts.length
                       ? "全て解除"
                       : "全て選択"}
-                  </button>
+                  </Button>
                 </div>
                 <Button
                   variant="ghost"
@@ -695,7 +703,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   className="flex-1"
-                  onClick={handleExportClick}
+                  onClick={() => setShowExportConfirm(true)}
                   disabled={selectedIds.size === 0 || exporting || marking || deleting}
                 >
                   {exporting ? (
@@ -703,9 +711,61 @@ export default function Home() {
                   ) : (
                     <Download className="size-4" />
                   )}
-                  {exporting ? "出力中..." : "ZIP エクスポート"}
+                  {exporting ? "出力中..." : "ZIP ダウンロード"}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* エクスポート確認ダイアログ */}
+      {showExportConfirm && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-background p-5 shadow-2xl">
+            <div className="mb-3 flex items-center gap-2">
+              <Download className="size-5 text-primary" />
+              <h2 className="text-base font-bold">ZIP ダウンロードの確認</h2>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              選択した{" "}
+              <span className="font-bold text-foreground">
+                {selectedIds.size}
+              </span>{" "}
+              件の商品を、写真フォルダ付きの ZIP
+              ファイルとしてダウンロードします。
+            </p>
+            <div className="mb-4 max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2 text-sm">
+              <ul className="space-y-1">
+                {products
+                  ?.filter((p) => selectedIds.has(p.id))
+                  .map((p) => (
+                    <li key={p.id} className="flex items-center gap-2">
+                      <span className="text-muted-foreground">・</span>
+                      <span className="truncate">
+                        {p.title ?? "（タイトル未入力）"}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowExportConfirm(false)}
+                disabled={exporting}
+              >
+                キャンセル
+              </Button>
+              <Button className="flex-1" onClick={doExport} disabled={exporting}>
+                {exporting ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 size-4" />
+                )}
+                ダウンロード
+              </Button>
             </div>
           </div>
         </div>
