@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PhotoManager } from "@/components/product-detail/PhotoManager";
 import { ShippingMethodSelect } from "@/components/ui/shipping-method-select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getPhotoSignedUrl,
@@ -33,10 +34,18 @@ type Editable = {
   storage_location: string;
   start_price: string;
   shipping_method_id: string | null;
+  thumbnail_pip: boolean;
   notes: string;
 };
 
-const CONDITION_OPTIONS = ["新品同様", "美品", "良品", "可", "難あり"];
+const CONDITION_OPTIONS = [
+  "未使用",
+  "未使用に近い",
+  "目立った傷や汚れなし",
+  "やや傷や汚れあり",
+  "傷や汚れあり",
+  "全体的に状態が悪い",
+];
 
 function toEditable(p: ProductDetail): Editable {
   return {
@@ -46,6 +55,7 @@ function toEditable(p: ProductDetail): Editable {
     storage_location: p.storage_location ?? "",
     start_price: p.start_price?.toString() ?? "",
     shipping_method_id: p.shipping_method_id,
+    thumbnail_pip: p.thumbnail_pip ?? false,
     notes: p.notes ?? "",
   };
 }
@@ -92,6 +102,7 @@ export default function ProductDetailPage() {
       storage_location: edit.storage_location || null,
       start_price: edit.start_price ? Number(edit.start_price) : null,
       shipping_method_id: edit.shipping_method_id,
+      thumbnail_pip: edit.thumbnail_pip,
       notes: edit.notes || null,
     });
     setSaving(false);
@@ -221,12 +232,12 @@ export default function ProductDetailPage() {
           <RadioGroup
             value={edit.condition}
             onValueChange={(v) => setEdit({ ...edit, condition: v })}
-            className="mt-2 grid grid-cols-5 gap-2"
+            className="mt-2 grid grid-cols-1 gap-2"
           >
             {CONDITION_OPTIONS.map((opt) => (
               <Label
                 key={opt}
-                className="flex cursor-pointer items-center justify-center rounded-md border border-zinc-300 p-2 text-sm hover:bg-zinc-50 has-[input:checked]:border-zinc-900 has-[input:checked]:bg-zinc-900 has-[input:checked]:text-white"
+                className="flex cursor-pointer items-center justify-center rounded-md border border-zinc-300 px-3 py-2.5 text-sm hover:bg-zinc-50 has-[[data-state=checked]]:border-zinc-900 has-[[data-state=checked]]:bg-zinc-900 has-[[data-state=checked]]:text-white"
               >
                 <RadioGroupItem value={opt} className="sr-only" />
                 {opt}
@@ -277,6 +288,24 @@ export default function ProductDetailPage() {
             rows={3}
           />
         </div>
+
+        {product.product_photos.length >= 2 && (
+          <div className="flex items-start justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="thumbnail_pip" className="text-sm font-medium">
+                サムネをピクチャーインピクチャーにする
+              </Label>
+              <p className="text-[11px] leading-snug text-zinc-500">
+                ZIP 出力時、1 枚目の左上に 2 枚目を小さく合成します（表裏を1枚で見せたいとき向け・元画像は無加工で保存）。
+              </p>
+            </div>
+            <Switch
+              id="thumbnail_pip"
+              checked={edit.thumbnail_pip}
+              onCheckedChange={(v) => setEdit({ ...edit, thumbnail_pip: v })}
+            />
+          </div>
+        )}
       </Card>
 
       <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-zinc-200 bg-white px-4 py-3">
