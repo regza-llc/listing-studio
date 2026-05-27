@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
 import { applyFrame } from "@/lib/frame-overlay";
 import { isFrameKey } from "@/lib/frame-templates";
+import { applyPip } from "@/lib/pip-overlay";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       .from("products")
       .select(
         `id, created_at, status, title, category_hint, condition,
-         storage_location, start_price, notes, shipping_method_id,
+         storage_location, start_price, notes, shipping_method_id, thumbnail_pip,
          shipping_method:shipping_methods ( carrier, name, size ),
          product_photos ( storage_path, order_index )`,
       )
@@ -76,16 +77,45 @@ export async function POST(req: NextRequest) {
         let buffer: Buffer = Buffer.from(await blob.arrayBuffer());
         let ext = photo.storage_path.split(".").pop() ?? "jpg";
 
-        // 1 枚目（サムネ）にだけ枠線フレームを合成（Option B・非破壊）
-        if (i === 0 && frame !== "none") {
-          try {
-            buffer = await applyFrame(buffer, frame);
-            ext = "jpg"; // applyFrame は常に JPEG を返す
-          } catch (e) {
-            warnings.push(
-              `商品 ${p.id} の 1 枚目フレーム合成に失敗（元画像で出力）`,
-            );
-            console.error("[export] applyFrame failed:", e);
+        // 1 枚目（サムネ）にだけ PiP → 枠線フレームの順で合成（Option B・非破壊）
+        if (i === 0) {
+          const pipEnabled =
+            (p as { thumbnail_pip?: boolean }).thumbnail_pip ?? false;
+
+          // PiP: 2 枚目を左上に小さく合成（内側）
+          if (pipEnabled && photos.length >= 2) {
+            const { data: insetBlob, error: insetErr } = await supabase.storage
+              .from("product-photos")
+              .download(photos[1].storage_path);
+            if (insetErr || !insetBlob) {
+              warnings.push(
+                `商品 ${p.id} の PiP 用 2 枚目がダウンロード失敗（PiP なしで出力）`,
+              );
+            } else {
+              try {
+                const insetBuffer = Buffer.from(await insetBlob.arrayBuffer());
+                buffer = await applyPip(buffer, insetBuffer);
+                ext = "jpg"; // applyPip は常に JPEG を返す
+              } catch (e) {
+                warnings.push(
+                  `商品 ${p.id} の PiP 合成に失敗（PiP なしで出力）`,
+                );
+                console.error("[export] applyPip failed:", e);
+              }
+            }
+          }
+
+          // 枠線フレーム: 外側に合成
+          if (frame !== "none") {
+            try {
+              buffer = await applyFrame(buffer, frame);
+              ext = "jpg"; // applyFrame は常に JPEG を返す
+            } catch (e) {
+              warnings.push(
+                `商品 ${p.id} の 1 枚目フレーム合成に失敗（元画像で出力）`,
+              );
+              console.error("[export] applyFrame failed:", e);
+            }
           }
         }
 
@@ -112,6 +142,7 @@ export async function POST(req: NextRequest) {
         storage_location: p.storage_location,
         start_price: p.start_price,
         shipping_method: shippingLabel,
+        thumbnail_pip: (p as { thumbnail_pip?: boolean }).thumbnail_pip ?? false,
         notes: p.notes,
         photos: photoFilenames,
       };
@@ -142,10 +173,11 @@ export async function POST(req: NextRequest) {
 - status            : ステータス (draft / ready / exported)
 - title             : 商品タイトル (任意・空欄の場合は Claude 側で生成)
 - category_hint     : カテゴリヒント
-- condition         : 商品の状態 (新品同様 / 美品 / 良品 / 可 / 難あり)
+- condition         : 商品の状態 (未使用 / 未使用に近い / 目立った傷や汚れなし / やや傷や汚れあり / 傷や汚れあり / 全体的に状態が悪い)
 - storage_location  : しまう場所
 - start_price       : 開始価格（円・任意）
 - shipping_method   : 配送方法 (キャリア / 商品名 / サイズ)
+- thumbnail_pip     : 1 枚目に 2 枚目を小さく合成（PiP）したか
 - notes             : 備考
 - photos            : 写真ファイル名の配列
 

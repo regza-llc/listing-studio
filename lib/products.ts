@@ -13,7 +13,7 @@ export type DraftPhotoInput = {
 export type SaveResult = { id: string } | { error: string };
 
 const PRODUCT_COLUMNS = `id, created_at, updated_at, status, title, category_hint,
-  condition, storage_location, start_price, shipping_method_id, notes`;
+  condition, storage_location, start_price, shipping_method_id, thumbnail_pip, notes`;
 
 export async function saveDraftProduct(
   photos: DraftPhotoInput[],
@@ -139,6 +139,7 @@ export type ProductUpdatePatch = Partial<{
   storage_location: string | null;
   start_price: number | null;
   shipping_method_id: string | null;
+  thumbnail_pip: boolean;
   notes: string | null;
   status: Product["status"];
 }>;

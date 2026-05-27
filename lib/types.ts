@@ -23,6 +23,7 @@ export type Product = {
   storage_location: string | null;
   start_price: number | null;
   shipping_method_id: string | null;
+  thumbnail_pip: boolean;
   notes: string | null;
 };
 

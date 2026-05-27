@@ -23,6 +23,7 @@ import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { useCameraSettings } from "@/lib/camera-settings";
+import { FRAME_OPTIONS } from "@/lib/frame-templates";
 import { createClient } from "@/lib/supabase/client";
 import { listProducts, type ProductListItem } from "@/lib/products";
 import { cn } from "@/lib/utils";
@@ -44,7 +45,8 @@ function topCategory(hint: string | null | undefined): string | null {
 }
 
 export default function Home() {
-  const { settings: cameraSettings } = useCameraSettings();
+  const { settings: cameraSettings, update: updateCameraSettings } =
+    useCameraSettings();
   const [products, setProducts] = useState<ProductListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -749,6 +751,38 @@ export default function Home() {
                   ))}
               </ul>
             </div>
+
+            {/* サムネ枠の選択（1 枚目に合成・全商品共通） */}
+            <div className="mb-4">
+              <p className="mb-1.5 text-xs font-semibold text-foreground">
+                サムネ枠（1 枚目に合成）
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {FRAME_OPTIONS.map((o) => {
+                  const active = cameraSettings.frame === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => updateCameraSettings({ frame: o.value })}
+                      disabled={exporting}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                        active
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50",
+                      )}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                元画像は無加工で保存されます。商品ごとの PiP 合成は各商品ページで設定できます。
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <Button
                 variant="outline"
