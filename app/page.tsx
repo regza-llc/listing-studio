@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   CheckCircle2,
   Columns3,
   Download,
@@ -18,7 +19,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card/ProductCard";
 import { Button } from "@/components/ui/button";
 import { KanbanView } from "@/components/home/KanbanView";
+import { DeathPileBanner } from "@/components/home/DeathPileBanner";
 import { WorkflowGuide } from "@/components/home/WorkflowGuide";
+import { isDeathPile } from "@/lib/death-pile";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Input } from "@/components/ui/input";
 import { NumberTicker } from "@/components/ui/number-ticker";
@@ -73,6 +76,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [staleOnly, setStaleOnly] = useState(false);
 
   // === 表示モード ===
   const [viewMode, setViewMode] = useState<"grid" | "kanban">("grid");
@@ -120,6 +124,7 @@ export default function Home() {
     if (!products) return null;
     const q = searchQuery.trim().toLowerCase();
     return products.filter((p) => {
+      if (staleOnly && !isDeathPile(p)) return false;
       const effectiveStatus = p.status === "reviewing" ? "ready" : p.status;
       if (statusFilter !== "all" && effectiveStatus !== statusFilter)
         return false;
@@ -138,9 +143,29 @@ export default function Home() {
       }
       return true;
     });
-  }, [products, searchQuery, statusFilter, categoryFilter]);
+  }, [products, searchQuery, statusFilter, categoryFilter, staleOnly]);
 
   const draftCount = statusCounts.draft;
+  const staleCount = useMemo(
+    () => products?.filter(isDeathPile).length ?? 0,
+    [products],
+  );
+
+  function clearFilters() {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setCategoryFilter(null);
+    setStaleOnly(false);
+  }
+
+  // 死蔵バナーから滞留商品だけに絞り込む（他フィルタは解除・グリッドで見せる）
+  function showStaleOnly() {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setCategoryFilter(null);
+    setStaleOnly(true);
+    setViewMode("grid");
+  }
 
   function handleSelectChange(id: string, next: boolean) {
     setSelectedIds((prev) => {
@@ -380,15 +405,22 @@ export default function Home() {
           onShowDrafts={() => {
             setSearchQuery("");
             setCategoryFilter(null);
+            setStaleOnly(false);
             setStatusFilter("draft");
           }}
           onStartExport={() => {
             setSearchQuery("");
             setCategoryFilter(null);
+            setStaleOnly(false);
             setStatusFilter("ready");
             setSelectMode(true);
           }}
         />
+      )}
+
+      {/* 死蔵（撮影済み未出品）バナー — 表示モードに関わらず常設 */}
+      {!selectMode && products && products.length > 0 && (
+        <DeathPileBanner products={products} onShowStale={showStaleOnly} />
       )}
 
       {!selectMode && products && products.length > 0 && (
@@ -459,6 +491,31 @@ export default function Home() {
                 </button>
               );
             })}
+
+            {/* 滞留のみ（死蔵）トグル */}
+            {staleCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setStaleOnly((v) => !v)}
+                className={cn(
+                  "group relative flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200",
+                  staleOnly
+                    ? "bg-orange-600 text-white shadow-lg shadow-orange-600/20"
+                    : "bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 hover:ring-orange-300",
+                )}
+              >
+                <AlertTriangle className="size-3" />
+                <span>滞留のみ</span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+                    staleOnly ? "bg-white/20 text-white" : "bg-orange-100 text-orange-600",
+                  )}
+                >
+                  <NumberTicker value={staleCount} />
+                </span>
+              </button>
+            )}
           </div>
 
           {/* カテゴリフィルタ */}
@@ -514,14 +571,11 @@ export default function Home() {
             </div>
             {(searchQuery ||
               statusFilter !== "all" ||
-              categoryFilter !== null) && (
+              categoryFilter !== null ||
+              staleOnly) && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setStatusFilter("all");
-                  setCategoryFilter(null);
-                }}
+                onClick={clearFilters}
                 className="text-primary underline-offset-2 hover:underline"
               >
                 フィルタを解除
@@ -567,11 +621,7 @@ export default function Home() {
           <p className="text-sm font-medium">検索条件に一致する商品がありません</p>
           <button
             type="button"
-            onClick={() => {
-              setSearchQuery("");
-              setStatusFilter("all");
-              setCategoryFilter(null);
-            }}
+            onClick={clearFilters}
             className="mt-2 text-xs text-primary underline-offset-2 hover:underline"
           >
             フィルタを解除する

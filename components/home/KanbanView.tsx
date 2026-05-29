@@ -2,13 +2,14 @@
 
 import { AlertTriangle, ImageOff } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { getPhotoSignedUrl } from "@/lib/products";
+import { useMemo } from "react";
 import type { ProductListItem } from "@/lib/products";
+import { daysSince, STALE_TIERS } from "@/lib/death-pile";
+import { useLazySignedUrl } from "@/lib/use-lazy-signed-url";
 import { cn } from "@/lib/utils";
 
 const DAILY_TARGET = 100; // 1日100件目標
-const STALE_DAYS_THRESHOLD = 7; // 7日以上未出品で赤フラグ
+const STALE_DAYS_THRESHOLD = STALE_TIERS.warn; // 7日以上未出品で赤フラグ
 
 type Column = {
   key: "draft" | "ready" | "exported";
@@ -37,10 +38,6 @@ const COLUMNS: Column[] = [
     accentColor: "border-sky-300 bg-sky-50",
   },
 ];
-
-function daysSince(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -163,21 +160,12 @@ export function KanbanView({ products }: { products: ProductListItem[] }) {
 }
 
 function KanbanCard({ product }: { product: ProductListItem }) {
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
   const firstPhoto = product.product_photos
     ?.slice()
     .sort((a, b) => a.order_index - b.order_index)?.[0];
-
-  useEffect(() => {
-    if (!firstPhoto) return;
-    let cancelled = false;
-    getPhotoSignedUrl(firstPhoto.storage_path).then((url) => {
-      if (!cancelled && url) setThumbUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [firstPhoto]);
+  const { ref: thumbRef, url: thumbUrl } = useLazySignedUrl(
+    firstPhoto?.storage_path,
+  );
 
   const days = daysSince(product.created_at);
   const isStale = days >= STALE_DAYS_THRESHOLD;
@@ -192,7 +180,7 @@ function KanbanCard({ product }: { product: ProductListItem }) {
           : "border-zinc-200",
       )}
     >
-      <div className="aspect-square w-full bg-zinc-100">
+      <div ref={thumbRef} className="aspect-square w-full bg-zinc-100">
         {thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
