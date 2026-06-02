@@ -1,12 +1,13 @@
 "use client";
 
-import { ImageOff, Images } from "lucide-react";
+import { AlertTriangle, ImageOff, Images } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getPhotoSignedUrl } from "@/lib/products";
 import type { ProductListItem } from "@/lib/products";
+import { daysSince, isUnlisted, staleTier } from "@/lib/death-pile";
+import { useLazySignedUrl } from "@/lib/use-lazy-signed-url";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<
@@ -61,31 +62,27 @@ export function ProductCard({
   selected = false,
   onSelectChange,
 }: ProductCardProps) {
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
-  const [thumbError, setThumbError] = useState(false);
-
   const photos = product.product_photos
     ?.slice()
     .sort((a, b) => a.order_index - b.order_index);
   const firstPhoto = photos?.[0];
   const photoCount = photos?.length ?? 0;
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!firstPhoto) return;
-    getPhotoSignedUrl(firstPhoto.storage_path).then((url) => {
-      if (cancelled) return;
-      if (url) setThumbUrl(url);
-      else setThumbError(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [firstPhoto]);
+  const {
+    ref: thumbRef,
+    url: thumbUrl,
+    failed,
+  } = useLazySignedUrl(firstPhoto?.storage_path);
+  const [imgError, setImgError] = useState(false);
+  const thumbError = failed || imgError;
 
   const statusInfo = STATUS_LABEL[product.status] ?? STATUS_LABEL.draft;
   const isReady =
     product.status === "ready" || product.status === "reviewing";
+
+  // 死蔵（撮影済み未出品）の滞留段階。グリッドでも一目で分かるようにバッジを出す。
+  const staleDays = daysSince(product.created_at);
+  const tier = isUnlisted(product) ? staleTier(staleDays) : "none";
 
   const innerClassName = cn(
     "block rounded-2xl bg-card transition-all duration-300",
@@ -103,14 +100,14 @@ export function ProductCard({
         isReady && "gradient-border-emerald",
       )}
     >
-      <div className="relative aspect-square w-full">
+      <div ref={thumbRef} className="relative aspect-square w-full">
         {thumbUrl && !thumbError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumbUrl}
             alt={product.title ?? "商品画像"}
             className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setThumbError(true)}
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="flex size-full items-center justify-center text-zinc-400">
@@ -126,6 +123,20 @@ export function ProductCard({
           >
             {statusInfo.label}
           </Badge>
+          {tier !== "none" && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-sm",
+                tier === "danger" && "bg-red-600 text-white",
+                tier === "warn" && "bg-orange-500 text-white",
+                tier === "notice" && "bg-amber-100 text-amber-800 ring-1 ring-amber-300",
+              )}
+              title={`撮影から ${staleDays} 日、未出品のままです`}
+            >
+              <AlertTriangle className="size-2.5" />
+              {staleDays}日滞留
+            </span>
+          )}
         </div>
 
         {photoCount > 1 && (

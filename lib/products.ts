@@ -83,11 +83,14 @@ export async function listProducts(): Promise<
 > {
   const supabase = createClient();
 
+  // ページング撤廃：全件取得する（500 品規模で一覧・カンバン集計・死蔵カウントが
+  // 100 件で頭打ちになる地雷を除去）。サムネは useLazySignedUrl で遅延ロードするため
+  // 件数が増えても初期描画コストは増えない。
+  // ※ Supabase のデフォルト最大行数は 1000。1000 品を超えたら range() ページ取得へ再設計する。
   const { data, error } = await supabase
     .from("products")
     .select(`${PRODUCT_COLUMNS}, product_photos ( storage_path, order_index )`)
-    .order("created_at", { ascending: false })
-    .limit(100);
+    .order("created_at", { ascending: false });
 
   if (error) return { error: error.message };
   return { products: (data ?? []) as ProductListItem[] };
